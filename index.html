@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Rateio Senac - Roteiros</title>
+    <title>Sistema de Rateio Senac - Final</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -25,12 +25,10 @@
         @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         
         /* Tabela compacta */
-        .table-tiny td, .table-tiny th { padding: 4px 8px; font-size: 0.85rem; }
+        .table-tiny td, .table-tiny th { padding: 6px 8px; font-size: 0.85rem; vertical-align: middle; }
         
         /* Estilo para impressão/cópia */
-        .print-area { background: white; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; }
-        .senac-header { border-bottom: 2px solid #f97316; margin-bottom: 15px; padding-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
-        .senac-logo { height: 40px; }
+        .print-area { background: white; padding: 30px; border: 1px solid #e2e8f0; border-radius: 8px; }
     </style>
 </head>
 <body>
@@ -44,7 +42,11 @@
         // =================================================================================
         
         const LINK_FIXO_DO_EXCEL = "https://github.com/Supervisao-pratica/Rateio/raw/refs/heads/main/RATEIO.xlsm"; 
-        const LOGO_SENAC = "https://upload.wikimedia.org/wikipedia/commons/8/86/Senac_logo.svg"; // Logo oficial para o relatório
+        const LOGO_SENAC = "https://upload.wikimedia.org/wikipedia/commons/8/86/Senac_logo.svg"; 
+
+        // Constantes de Relatório
+        const INFO_DESLOCAMENTO = { uept: 27, tept: 5956, evento: 3 };
+        const INFO_ATENDIMENTO = { uept: 27, tept: 5956, evento: 24 };
 
         // =================================================================================
 
@@ -65,8 +67,11 @@
         const MapPin = (p) => <IconWrapper {...p}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></IconWrapper>;
         const Clipboard = (p) => <IconWrapper {...p}><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></IconWrapper>;
         const X = (p) => <IconWrapper {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></IconWrapper>;
+        const Home = (p) => <IconWrapper {...p}><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></IconWrapper>;
 
         const Card = ({ children, className = "" }) => (<div className={`bg-white rounded-xl shadow-sm border border-gray-100 p-6 ${className}`}>{children}</div>);
+        
+        // Utilitários
         const calculateDuration = (start, end) => { 
             if (!start || !end) return 0; 
             const [startH, startM] = start.split(':').map(Number); 
@@ -79,6 +84,11 @@
             const h = Math.floor(decimalHours); 
             const m = Math.round((decimalHours - h) * 60); 
             return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`; 
+        };
+        const formatDatePT = (dateString) => {
+            if(!dateString) return "";
+            const [y, m, d] = dateString.split('-');
+            return `${d}/${m}/${y}`;
         };
 
         function App() {
@@ -101,6 +111,7 @@
             const [routeDate, setRouteDate] = useState('');
             const [startPoint, setStartPoint] = useState({ city: '', time: '' });
             const [stops, setStops] = useState([]);
+            const [returnPoint, setReturnPoint] = useState({ city: '', time: '', ccId: '' }); // NOVO: Retorno
 
             const [newAdmin, setNewAdmin] = useState({ data: '', turma: '', atividade: '', inicio: '', fim: '', supervisor: '' });
 
@@ -124,6 +135,8 @@
 
             const processWorkbook = (wb, source) => {
                 let counts = { cc: 0, banks: 0 };
+                
+                // 1. Processar CCs
                 if (wb.SheetNames.some(n => n.includes("CC"))) {
                     const ws = wb.Sheets[wb.SheetNames.find(n => n.includes("CC"))];
                     const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
@@ -134,9 +147,7 @@
                             const turma = row[0];
                             const codigo = row[1];
                             const desc = row[2] || '';
-                            if(turma && codigo) {
-                                mapped.push({ id: i, turma: String(turma).trim(), codigo: String(codigo).trim(), descricao: String(desc).trim() });
-                            }
+                            if(turma && codigo) mapped.push({ id: i, turma: String(turma).trim(), codigo: String(codigo).trim(), descricao: String(desc).trim() });
                         }
                     }
                     if(mapped.length > 0) {
@@ -144,17 +155,28 @@
                         counts.cc = mapped.length;
                     }
                 }
-                const horaSheetName = wb.SheetNames.find(n => n.toUpperCase().includes("CONTROLE") || n.toUpperCase().includes("HORA"));
+
+                // 2. Processar Horas (Aba Específica "CONTROLE DE HORAS POR TURMA PR")
+                // Busca por nome exato ou fuzzy
+                const horaSheetName = wb.SheetNames.find(n => 
+                    n.toUpperCase().trim() === "CONTROLE DE HORAS POR TURMA PR" || 
+                    (n.toUpperCase().includes("CONTROLE") && n.toUpperCase().includes("HORAS"))
+                );
+
                 if (horaSheetName) {
                     const ws = wb.Sheets[horaSheetName];
                     const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
                     const mapped = [];
+                    // Linha 5 no Excel = índice 4 no array
+                    // Coluna A (Turma) = índice 0
+                    // Coluna J (Total) = índice 9
                     for(let i=4; i < data.length; i++) {
                         const row = data[i];
                         if(row) {
                             const turma = row[0];
                             const total = row[9];
-                            if(turma && typeof total === 'number') {
+                            // Validação simples: tem nome de turma e total é numérico
+                            if(turma && typeof total === 'number' && total > 0) {
                                 mapped.push({ id: i, turma: String(turma).trim(), totalHoras: total });
                             }
                         }
@@ -164,7 +186,8 @@
                         counts.banks = mapped.length;
                     }
                 }
-                if (source === 'manual') showToast(`Sucesso! CCs: ${counts.cc}, Turmas: ${counts.banks}`);
+
+                if (source === 'manual') showToast(`Sucesso! CCs: ${counts.cc}, Turmas com Horas: ${counts.banks}`);
             };
 
             const handleManualUpload = (e) => {
@@ -183,13 +206,19 @@
             const updateStop = (id, field, value) => setStops(stops.map(s => s.id === id ? { ...s, [field]: value } : s));
 
             const saveRoute = () => {
-                if (!routeDate || !startPoint.city || !startPoint.time) return alert("Preencha a data e o ponto de partida.");
-                if (stops.length === 0) return alert("Adicione pelo menos um destino.");
+                if (!routeDate || !startPoint.city || !startPoint.time) return alert("Preencha data e partida.");
+                // Retorno é opcional, mas se preencher cidade, exige horário
+                if (returnPoint.city && !returnPoint.time) return alert("Preencha o horário de chegada do retorno.");
+
                 const newEntries = [];
                 let lastCity = startPoint.city;
                 let lastTime = startPoint.time;
+
+                // Paradas Intermediárias
                 stops.forEach(stop => {
                     if (!stop.city || !stop.arrival || !stop.ccId) return;
+                    
+                    // Deslocamento (Ida até a parada)
                     const travelTime = calculateDuration(lastTime, stop.arrival);
                     if (travelTime > 0) {
                         newEntries.push({
@@ -204,6 +233,8 @@
                             horas: travelTime
                         });
                     }
+                    
+                    // Atendimento
                     if (stop.departure) {
                         const workTime = calculateDuration(stop.arrival, stop.departure);
                         if (workTime > 0) {
@@ -224,35 +255,49 @@
                     }
                     lastCity = stop.city;
                 });
+
+                // Retorno Final (Apenas Deslocamento)
+                if (returnPoint.city && returnPoint.time) {
+                    const returnTime = calculateDuration(lastTime, returnPoint.time);
+                    if (returnTime > 0) {
+                        newEntries.push({
+                            id: Date.now() + Math.random(),
+                            type: 'deslocamento',
+                            data: routeDate,
+                            origem: lastCity,
+                            destino: returnPoint.city,
+                            inicio: lastTime,
+                            fim: returnPoint.time,
+                            turma: returnPoint.ccId || stops[stops.length-1]?.ccId || '', // Usa CC da última parada se não tiver específico
+                            horas: returnTime
+                        });
+                    }
+                }
+
                 setVisits([...visits, ...newEntries]);
                 showToast(`${newEntries.length} lançamentos gerados!`);
                 setStops([]);
                 setStartPoint({ city: '', time: '' });
+                setReturnPoint({ city: '', time: '', ccId: '' });
             };
 
             const addAdmin = () => {
-                if (!newAdmin.turma || !newAdmin.data) return alert("Preencha os dados obrigatórios");
+                if (!newAdmin.turma || !newAdmin.data) return alert("Preencha dados obrigatórios");
                 setAdminEntries([...adminEntries, { ...newAdmin, id: Date.now() }]);
                 setNewAdmin({ ...newAdmin, inicio: '', fim: '' });
-                showToast("Lançamento administrativo salvo!");
+                showToast("Admin salvo!");
             };
 
-            // Função para copiar o relatório (rich text)
             const copyReportToClipboard = () => {
                 if (!reportRef.current) return;
-                
-                // Criação do range de seleção
                 const range = document.createRange();
                 range.selectNode(reportRef.current);
                 window.getSelection().removeAllRanges();
                 window.getSelection().addRange(range);
-                
                 try {
                     document.execCommand('copy');
-                    showToast("Copiado! Agora cole no corpo do e-mail do Outlook (Ctrl+V).");
-                } catch (err) {
-                    alert("Erro ao copiar.");
-                }
+                    showToast("Copiado! Cole no Outlook.");
+                } catch (err) { alert("Erro ao copiar."); }
                 window.getSelection().removeAllRanges();
             };
 
@@ -288,25 +333,19 @@
                 XLSX.writeFile(wb, "Backup_Sistema.xlsx");
             };
 
-            // --- Componente do Modal de Relatório ---
             const ReportModal = () => {
                 if (!reportModalOpen) return null;
-
                 const today = new Date().toLocaleDateString('pt-BR');
-                
-                // Filtra dados do dia ou tudo? Vou mostrar tudo para simplificar, ou poderia filtrar.
-                // Vou mostrar uma tabela consolidada bonita
                 
                 return (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+                        <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
                             <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
                                 <h3 className="font-bold text-lg text-gray-800">Visualizar Relatório para E-mail</h3>
                                 <button onClick={() => setReportModalOpen(false)}><X className="text-gray-500 hover:text-red-500" /></button>
                             </div>
                             
                             <div className="p-6 overflow-y-auto bg-gray-100">
-                                {/* Área de Impressão / Cópia */}
                                 <div ref={reportRef} className="print-area font-sans text-gray-800 bg-white">
                                     <div className="senac-header" style={{borderBottom: '2px solid #f97316', paddingBottom: '15px', marginBottom: '20px'}}>
                                         <div>
@@ -319,58 +358,74 @@
                                     {reportType === 'visitas' && (
                                         <div>
                                             <h3 style={{color: '#f97316', fontWeight: 'bold', borderBottom: '1px solid #eee', paddingBottom: '5px'}}>Resumo de Roteiros e Visitas</h3>
-                                            <table style={{width: '100%', borderCollapse: 'collapse', marginTop: '10px', fontSize: '13px'}}>
+                                            <table style={{width: '100%', borderCollapse: 'collapse', marginTop: '10px', fontSize: '12px'}}>
                                                 <thead>
                                                     <tr style={{backgroundColor: '#004587', color: 'white'}}>
-                                                        <th style={{padding: '8px', textAlign: 'left', border: '1px solid #00366a'}}>Data</th>
-                                                        <th style={{padding: '8px', textAlign: 'left', border: '1px solid #00366a'}}>Tipo</th>
-                                                        <th style={{padding: '8px', textAlign: 'left', border: '1px solid #00366a'}}>Detalhes (Rota/Local)</th>
-                                                        <th style={{padding: '8px', textAlign: 'left', border: '1px solid #00366a'}}>Horário</th>
-                                                        <th style={{padding: '8px', textAlign: 'left', border: '1px solid #00366a'}}>Turma</th>
-                                                        <th style={{padding: '8px', textAlign: 'left', border: '1px solid #00366a'}}>Centro de Custo (CC)</th>
-                                                        <th style={{padding: '8px', textAlign: 'right', border: '1px solid #00366a'}}>Horas</th>
+                                                        <th style={{padding: '8px', border: '1px solid #00366a'}}>Data</th>
+                                                        <th style={{padding: '8px', border: '1px solid #00366a'}}>Tipo / Info Senac</th>
+                                                        <th style={{padding: '8px', border: '1px solid #00366a'}}>Detalhes</th>
+                                                        <th style={{padding: '8px', border: '1px solid #00366a'}}>Horários</th>
+                                                        <th style={{padding: '8px', border: '1px solid #00366a'}}>Turma/CC</th>
+                                                        <th style={{padding: '8px', border: '1px solid #00366a', textAlign: 'right'}}>Horas</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {visits.map((v, i) => {
                                                         const cc = costCenters.find(c => c.id == v.turma);
-                                                        const turmaDisplay = cc ? cc.turma : 'N/A';
                                                         const ccCodigo = cc ? cc.codigo : '-';
+                                                        const turmaNome = cc ? cc.turma : 'N/A';
                                                         const rowBg = i % 2 === 0 ? '#ffffff' : '#f8fafc';
+                                                        
+                                                        // Infos SENAC
+                                                        const info = v.type === 'deslocamento' ? INFO_DESLOCAMENTO : INFO_ATENDIMENTO;
+                                                        
                                                         return (
                                                             <tr key={i} style={{backgroundColor: rowBg}}>
-                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>{v.data}</td>
+                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>{formatDatePT(v.data)}</td>
                                                                 <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>
-                                                                    {v.type === 'deslocamento' ? 'Deslocamento' : 'Atendimento'}
+                                                                    <div style={{fontWeight:'bold', color: v.type==='deslocamento'?'#d97706':'#15803d'}}>{v.type.toUpperCase()}</div>
+                                                                    <div style={{fontSize:'10px', color:'#555', marginTop:'4px'}}>
+                                                                        UEPT: {info.uept} | TEPT: {info.tept}<br/>
+                                                                        Evento: <b>{info.evento}</b>
+                                                                    </div>
                                                                 </td>
                                                                 <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>
-                                                                    {v.type === 'deslocamento' ? `${v.origem} > ${v.destino}` : v.local}
+                                                                    {v.type === 'deslocamento' ? 
+                                                                        <span>{v.origem} &#10140; {v.destino}</span> : 
+                                                                        <span>Atend. em {v.local}</span>
+                                                                    }
                                                                 </td>
-                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>{v.inicio} - {v.fim}</td>
-                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>{turmaDisplay}</td>
-                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0', fontFamily: 'monospace', fontWeight: 'bold'}}>{ccCodigo}</td>
+                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0', whiteSpace:'nowrap'}}>
+                                                                    {v.type === 'deslocamento' ? 
+                                                                        <div>Saída: {v.inicio}<br/>Chegada: {v.fim}</div> : 
+                                                                        <div>Início: {v.inicio}<br/>Fim: {v.fim}</div>
+                                                                    }
+                                                                </td>
+                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>
+                                                                    <div>{turmaNome}</div>
+                                                                    <div style={{fontFamily: 'monospace', fontWeight: 'bold', color:'#004587'}}>{ccCodigo}</div>
+                                                                </td>
                                                                 <td style={{padding: '8px', border: '1px solid #e2e8f0', textAlign: 'right', fontWeight: 'bold'}}>{formatHours(v.horas)}</td>
                                                             </tr>
                                                         );
                                                     })}
                                                 </tbody>
                                             </table>
-                                            {visits.length === 0 && <p style={{fontStyle: 'italic', color: '#999', marginTop: '10px'}}>Nenhum registro encontrado.</p>}
                                         </div>
                                     )}
 
                                     {reportType === 'admin' && (
                                         <div>
                                             <h3 style={{color: '#f97316', fontWeight: 'bold', borderBottom: '1px solid #eee', paddingBottom: '5px'}}>Lançamentos Administrativos</h3>
-                                            <table style={{width: '100%', borderCollapse: 'collapse', marginTop: '10px', fontSize: '13px'}}>
+                                            <table style={{width: '100%', borderCollapse: 'collapse', marginTop: '10px', fontSize: '12px'}}>
                                                 <thead>
                                                     <tr style={{backgroundColor: '#004587', color: 'white'}}>
-                                                        <th style={{padding: '8px', textAlign: 'left', border: '1px solid #00366a'}}>Data</th>
-                                                        <th style={{padding: '8px', textAlign: 'left', border: '1px solid #00366a'}}>Atividade</th>
-                                                        <th style={{padding: '8px', textAlign: 'left', border: '1px solid #00366a'}}>Horário</th>
-                                                        <th style={{padding: '8px', textAlign: 'left', border: '1px solid #00366a'}}>Turma</th>
-                                                        <th style={{padding: '8px', textAlign: 'left', border: '1px solid #00366a'}}>Centro de Custo (CC)</th>
-                                                        <th style={{padding: '8px', textAlign: 'right', border: '1px solid #00366a'}}>Total</th>
+                                                        <th style={{padding: '8px', border: '1px solid #00366a'}}>Data</th>
+                                                        <th style={{padding: '8px', border: '1px solid #00366a'}}>Info Senac</th>
+                                                        <th style={{padding: '8px', border: '1px solid #00366a'}}>Atividade</th>
+                                                        <th style={{padding: '8px', border: '1px solid #00366a'}}>Horários</th>
+                                                        <th style={{padding: '8px', border: '1px solid #00366a'}}>Turma/CC</th>
+                                                        <th style={{padding: '8px', border: '1px solid #00366a', textAlign: 'right'}}>Total</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -380,24 +435,25 @@
                                                         const rowBg = i % 2 === 0 ? '#ffffff' : '#f8fafc';
                                                         return (
                                                             <tr key={i} style={{backgroundColor: rowBg}}>
-                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>{a.data}</td>
+                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>{formatDatePT(a.data)}</td>
+                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0', fontSize:'10px', color:'#555'}}>
+                                                                    UEPT: {INFO_ATENDIMENTO.uept} | TEPT: {INFO_ATENDIMENTO.tept}<br/>
+                                                                    Evento: <b>{INFO_ATENDIMENTO.evento}</b>
+                                                                </td>
                                                                 <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>{a.atividade}</td>
-                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>{a.inicio} - {a.fim}</td>
-                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>{a.turma}</td>
-                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0', fontFamily: 'monospace', fontWeight: 'bold'}}>{ccCodigo}</td>
+                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0', whiteSpace:'nowrap'}}>Início: {a.inicio}<br/>Fim: {a.fim}</td>
+                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>
+                                                                    <div>{a.turma}</div>
+                                                                    <div style={{fontFamily: 'monospace', fontWeight: 'bold', color:'#004587'}}>{ccCodigo}</div>
+                                                                </td>
                                                                 <td style={{padding: '8px', border: '1px solid #e2e8f0', textAlign: 'right', fontWeight: 'bold'}}>{formatHours(calculateDuration(a.inicio, a.fim))}</td>
                                                             </tr>
                                                         );
                                                     })}
                                                 </tbody>
                                             </table>
-                                            {adminEntries.length === 0 && <p style={{fontStyle: 'italic', color: '#999', marginTop: '10px'}}>Nenhum registro encontrado.</p>}
                                         </div>
                                     )}
-
-                                    <div style={{marginTop: '20px', fontSize: '12px', color: '#888', borderTop: '1px solid #eee', paddingTop: '10px'}}>
-                                        <p>Gerado automaticamente pelo Sistema de Rateio.</p>
-                                    </div>
                                 </div>
                             </div>
 
@@ -419,54 +475,74 @@
                             <h3 className="font-bold text-lg flex items-center gap-2"><MapPin className="text-blue-600"/> Criador de Roteiro Diário</h3>
                             <input type="date" className="p-2 border rounded font-bold text-gray-700" value={routeDate} onChange={e => setRouteDate(e.target.value)} />
                         </div>
+                        
+                        {/* Partida */}
                         <div className="p-4 bg-gray-50 rounded-lg mb-4 border border-gray-200">
-                            <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Ponto de Partida (Início do Dia)</h4>
+                            <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">1. Ponto de Partida</h4>
                             <div className="grid grid-cols-2 gap-4">
-                                <input type="text" placeholder="Cidade de Origem (ex: Curitiba)" className="p-2 border rounded" value={startPoint.city} onChange={e => setStartPoint({...startPoint, city: e.target.value})} />
-                                <input type="time" title="Horário de Saída" className="p-2 border rounded" value={startPoint.time} onChange={e => setStartPoint({...startPoint, time: e.target.value})} />
+                                <input type="text" placeholder="Cidade Origem" className="p-2 border rounded" value={startPoint.city} onChange={e => setStartPoint({...startPoint, city: e.target.value})} />
+                                <input type="time" className="p-2 border rounded" value={startPoint.time} onChange={e => setStartPoint({...startPoint, time: e.target.value})} />
                             </div>
                         </div>
+
+                        {/* Paradas */}
                         <div className="space-y-3 mb-4">
                             {stops.map((stop, idx) => (
                                 <div key={stop.id} className="p-4 bg-white border border-blue-100 rounded-lg shadow-sm relative">
                                     <div className="absolute -left-3 top-1/2 -translate-y-1/2 bg-blue-100 text-blue-600 rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">{idx+1}</div>
                                     <button onClick={() => removeStop(stop.id)} className="absolute top-2 right-2 text-red-400 hover:text-red-600"><Trash2 size={16}/></button>
                                     <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                                        <div className="col-span-1"><label className="text-xs text-gray-500">Cidade Destino</label><input type="text" placeholder="Cidade" className="w-full p-2 border rounded" value={stop.city} onChange={e => updateStop(stop.id, 'city', e.target.value)} /></div>
-                                        <div className="col-span-1"><label className="text-xs text-gray-500">Chegada</label><input type="time" className="w-full p-2 border rounded" value={stop.arrival} onChange={e => updateStop(stop.id, 'arrival', e.target.value)} /></div>
-                                        <div className="col-span-1"><label className="text-xs text-gray-500">Saída (Fim atend.)</label><input type="time" className="w-full p-2 border rounded" value={stop.departure} onChange={e => updateStop(stop.id, 'departure', e.target.value)} /></div>
-                                        <div className="col-span-1"><label className="text-xs text-gray-500">Vincular a Turma/CC</label><select className="w-full p-2 border rounded text-sm" value={stop.ccId} onChange={e => updateStop(stop.id, 'ccId', e.target.value)}><option value="">Selecione...</option>{costCenters.map(cc => (<option key={cc.id} value={cc.id}>{cc.turma} - {cc.codigo}</option>))}</select></div>
-                                    </div>
-                                    <div className="mt-2 text-xs text-gray-400 flex gap-4">
-                                        <span>Deslocamento: {startPoint.time && stop.arrival ? formatHours(calculateDuration(idx === 0 ? startPoint.time : stops[idx-1].departure, stop.arrival)) + 'h' : '--:--'}</span>
-                                        <span>Atendimento: {stop.arrival && stop.departure ? formatHours(calculateDuration(stop.arrival, stop.departure)) + 'h' : '--:--'}</span>
+                                        <div><label className="text-xs text-gray-500">Cidade Destino</label><input type="text" className="w-full p-2 border rounded" value={stop.city} onChange={e => updateStop(stop.id, 'city', e.target.value)} /></div>
+                                        <div><label className="text-xs text-gray-500">Chegada</label><input type="time" className="w-full p-2 border rounded" value={stop.arrival} onChange={e => updateStop(stop.id, 'arrival', e.target.value)} /></div>
+                                        <div><label className="text-xs text-gray-500">Saída (Fim atend.)</label><input type="time" className="w-full p-2 border rounded" value={stop.departure} onChange={e => updateStop(stop.id, 'departure', e.target.value)} /></div>
+                                        <div><label className="text-xs text-gray-500">Turma/CC</label><select className="w-full p-2 border rounded text-sm" value={stop.ccId} onChange={e => updateStop(stop.id, 'ccId', e.target.value)}><option value="">Selecione...</option>{costCenters.map(cc => (<option key={cc.id} value={cc.id}>{cc.turma} - {cc.codigo}</option>))}</select></div>
                                     </div>
                                 </div>
                             ))}
+                            <button onClick={addStop} className="w-full py-2 border-2 border-dashed border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 font-semibold flex justify-center items-center gap-2"><Plus size={18}/> Adicionar Parada/Atendimento</button>
                         </div>
-                        <div className="flex gap-2">
-                            <button onClick={addStop} className="flex-1 py-2 border-2 border-dashed border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 font-semibold flex justify-center items-center gap-2"><Plus size={18}/> Adicionar Destino</button>
-                            <button onClick={saveRoute} className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold flex justify-center items-center gap-2"><Save size={18}/> Processar Roteiro</button>
+
+                        {/* Retorno */}
+                        <div className="p-4 bg-orange-50 rounded-lg mb-4 border border-orange-200">
+                            <h4 className="text-xs font-bold text-orange-600 uppercase mb-2 flex items-center gap-1"><Home size={14}/> Retorno à Base / Final (Apenas Deslocamento)</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div><label className="text-xs text-gray-500">Cidade Final</label><input type="text" className="w-full p-2 border rounded" value={returnPoint.city} onChange={e => setReturnPoint({...returnPoint, city: e.target.value})} /></div>
+                                <div><label className="text-xs text-gray-500">Chegada</label><input type="time" className="w-full p-2 border rounded" value={returnPoint.time} onChange={e => setReturnPoint({...returnPoint, time: e.target.value})} /></div>
+                                <div>
+                                    <label className="text-xs text-gray-500">CC do Deslocamento (Opcional)</label>
+                                    <select className="w-full p-2 border rounded text-sm" value={returnPoint.ccId} onChange={e => setReturnPoint({...returnPoint, ccId: e.target.value})}>
+                                        <option value="">Usar CC da última parada</option>
+                                        {costCenters.map(cc => (<option key={cc.id} value={cc.id}>{cc.turma}</option>))}
+                                    </select>
+                                </div>
+                            </div>
                         </div>
+
+                        <button onClick={saveRoute} className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold flex justify-center items-center gap-2 shadow-lg"><Save size={18}/> Salvar Roteiro Completo</button>
                     </Card>
+
                     <Card>
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="font-bold text-gray-700">Histórico de Atividades</h3>
-                            <button onClick={() => { setReportType('visitas'); setReportModalOpen(true); }} className="text-sm bg-orange-500 text-white px-3 py-1 rounded hover:bg-orange-600 flex items-center gap-1 shadow"><Mail size={14}/> Gerar Relatório para E-mail</button>
+                            <button onClick={() => { setReportType('visitas'); setReportModalOpen(true); }} className="text-sm bg-orange-500 text-white px-3 py-1 rounded hover:bg-orange-600 flex items-center gap-1 shadow"><Mail size={14}/> Relatório E-mail</button>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left table-tiny">
-                                <thead className="bg-gray-100 text-gray-600"><tr><th>Tipo</th><th>Data</th><th>Detalhe (Rota/Local)</th><th>Horário</th><th>Turma</th><th>CC</th><th>Total</th><th></th></tr></thead>
+                                <thead className="bg-gray-100 text-gray-600"><tr><th>Data</th><th>Tipo</th><th>Detalhe</th><th>Horários</th><th>Turma</th><th>CC</th><th>Horas</th><th></th></tr></thead>
                                 <tbody>{visits.map(v => {
                                     const cc = costCenters.find(c => c.id == v.turma);
-                                    const turmaDisplay = cc ? cc.turma : 'N/A';
-                                    const ccDisplay = cc ? cc.codigo : '-';
+                                    const turma = cc ? cc.turma : 'N/A';
+                                    const cod = cc ? cc.codigo : '-';
                                     return (
                                         <tr key={v.id} className="border-b hover:bg-gray-50">
-                                            <td className="p-2">{v.type === 'deslocamento' ? <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800"><Car size={14} className="mr-1"/> Desloc.</span> : <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800"><Tool size={14} className="mr-1"/> Atend.</span>}</td>
-                                            <td>{v.data}</td><td className="text-gray-600">{v.type === 'deslocamento' ? `${v.origem} ➝ ${v.destino}` : v.local}</td><td className="text-xs font-mono">{v.inicio} - {v.fim}</td><td className="text-xs">{turmaDisplay}</td>
-                                            <td className="text-xs font-mono text-blue-600">{ccDisplay}</td>
-                                            <td className="font-bold">{formatHours(v.horas)}</td><td><button onClick={() => setVisits(visits.filter(x => x.id !== v.id))} className="text-red-400 hover:text-red-600"><Trash2 size={14}/></button></td>
+                                            <td>{formatDatePT(v.data)}</td>
+                                            <td>{v.type === 'deslocamento' ? <span className="text-yellow-600 font-bold text-xs">Desloc.</span> : <span className="text-green-600 font-bold text-xs">Atend.</span>}</td>
+                                            <td className="text-gray-600 text-xs">{v.type === 'deslocamento' ? `${v.origem} > ${v.destino}` : v.local}</td>
+                                            <td className="text-xs whitespace-nowrap">{v.type==='deslocamento' ? `Saída: ${v.inicio} Cheg: ${v.fim}` : `Início: ${v.inicio} Fim: ${v.fim}`}</td>
+                                            <td className="text-xs">{turma}</td>
+                                            <td className="text-xs font-mono text-blue-600">{cod}</td>
+                                            <td className="font-bold text-xs">{formatHours(v.horas)}</td>
+                                            <td><button onClick={() => setVisits(visits.filter(x => x.id !== v.id))} className="text-red-400"><Trash2 size={14}/></button></td>
                                         </tr>
                                     );
                                 })}</tbody>
@@ -478,6 +554,7 @@
 
             const renderControle = () => (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {hourBanks.length === 0 && <div className="col-span-full p-8 text-center bg-gray-100 rounded-lg text-gray-500">Nenhum controle de horas carregado. Verifique se a planilha "CONTROLE DE HORAS POR TURMA PR" existe e possui dados na linha 5.</div>}
                     {hourBanks.map(bank => {
                         const stats = consumptionByClass[bank.turma] || { used: 0, total: bank.totalHoras };
                         const percentage = bank.totalHoras > 0 ? Math.min((stats.used / bank.totalHoras) * 100, 100) : 0;
@@ -508,13 +585,13 @@
                     <Card>
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="font-bold text-gray-700">Histórico Admin</h3>
-                            <button onClick={() => { setReportType('admin'); setReportModalOpen(true); }} className="text-sm bg-orange-500 text-white px-3 py-1 rounded hover:bg-orange-600 flex items-center gap-1 shadow"><Mail size={14}/> Gerar Relatório para E-mail</button>
+                            <button onClick={() => { setReportType('admin'); setReportModalOpen(true); }} className="text-sm bg-orange-500 text-white px-3 py-1 rounded hover:bg-orange-600 flex items-center gap-1 shadow"><Mail size={14}/> Relatório E-mail</button>
                         </div>
-                        <table className="w-full text-sm text-left"><thead className="bg-gray-100"><tr><th className="p-2">Data</th><th className="p-2">Ativ.</th><th className="p-2">Turma</th><th className="p-2">CC</th><th className="p-2">Total</th><th></th></tr></thead>
+                        <table className="w-full text-sm text-left"><thead className="bg-gray-100"><tr><th className="p-2">Data</th><th className="p-2">Ativ.</th><th className="p-2">Turma</th><th className="p-2">CC</th><th className="p-2">Horários</th><th className="p-2">Total</th><th></th></tr></thead>
                         <tbody>{adminEntries.map(a => {
                             const cc = costCenters.find(c => c.turma === a.turma);
                             const ccCodigo = cc ? cc.codigo : '-';
-                            return (<tr key={a.id} className="border-b"><td className="p-2">{a.data}</td><td className="p-2">{a.atividade}</td><td className="p-2">{a.turma}</td><td className="p-2 font-mono text-blue-600 text-xs">{ccCodigo}</td><td className="p-2 font-bold">{formatHours(calculateDuration(a.inicio, a.fim))}</td><td><button onClick={() => setAdminEntries(adminEntries.filter(x => x.id !== a.id))} className="text-red-400"><Trash2 size={14}/></button></td></tr>);
+                            return (<tr key={a.id} className="border-b"><td className="p-2">{formatDatePT(a.data)}</td><td className="p-2">{a.atividade}</td><td className="p-2">{a.turma}</td><td className="p-2 font-mono text-blue-600 text-xs">{ccCodigo}</td><td className="p-2 text-xs">Início: {a.inicio} Fim: {a.fim}</td><td className="p-2 font-bold">{formatHours(calculateDuration(a.inicio, a.fim))}</td><td><button onClick={() => setAdminEntries(adminEntries.filter(x => x.id !== a.id))} className="text-red-400"><Trash2 size={14}/></button></td></tr>);
                         })}</tbody></table>
                     </Card>
                 </div>
@@ -556,7 +633,7 @@
                     </div>
 
                     <div className="max-w-6xl mx-auto bg-white rounded-lg shadow-sm p-1 mb-6 flex overflow-x-auto">
-                        {[{ id: 'controle', icon: BarChart3, label: 'Painel Geral' }, { id: 'visitas', icon: MapPin, label: 'Roteiro de Visitas' }, { id: 'admin', icon: Users, label: 'Administrativo' }, { id: 'cc', icon: Database, label: 'Ver CCs' }].map(tab => (
+                        {[{ id: 'controle', icon: BarChart3, label: 'Painel Geral' }, { id: 'visitas', icon: Car, label: 'Lançar Visitas' }, { id: 'admin', icon: Users, label: 'Lançar Admin' }, { id: 'cc', icon: Database, label: 'Ver CCs' }].map(tab => (
                             <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-md transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-blue-50 text-blue-600 font-bold shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>
                                 <tab.icon size={18} /> {tab.label}
                             </button>
