@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Rateio - Automático</title>
+    <title>Sistema de Rateio - Roteiros</title>
     
-    <!-- Tailwind CSS (Visual) -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- React (Motor) -->
+    <!-- React & Babel -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -16,347 +16,479 @@
     <!-- SheetJS (Excel) -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 
+    <!-- Estilos Extras -->
     <style>
         body { font-family: 'Segoe UI', sans-serif; background-color: #f8fafc; }
-        .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.9); z-index: 50; display: flex; justify-content: center; align-items: center; flex-direction: column; }
-        .spinner { width: 40px; height: 40px; border: 4px solid #e2e8f0; border-top: 4px solid #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 24px; border-radius: 8px; color: white; animation: slideUp 0.3s ease-out; z-index: 100; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 300px; font-size: 14px; }
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 24px; border-radius: 8px; color: white; animation: slideUp 0.3s ease-out; z-index: 100; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .toast-success { background-color: #10b981; }
         .toast-error { background-color: #ef4444; }
         @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        /* Tabela compacta */
+        .table-tiny td, .table-tiny th { padding: 4px 8px; font-size: 0.85rem; }
     </style>
 </head>
 <body>
-    <div id="root">
-        <div class="loading-overlay">
-            <div class="spinner"></div>
-            <p class="mt-4 text-gray-600 font-medium">Iniciando sistema...</p>
-        </div>
-    </div>
+    <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
         // =================================================================================
-        // CONFIGURAÇÃO OBRIGATÓRIA
+        // CONFIGURAÇÃO
         // =================================================================================
         
-        // Link corrigido para o formato RAW direto
-        const LINK_FIXO_DO_EXCEL = "https://raw.githubusercontent.com/Supervisao-pratica/Rateio/main/RATEIO.xlsm"; 
+        // Link Raw do GitHub (opcional, pode deixar vazio se for usar upload manual)
+        const LINK_FIXO_DO_EXCEL = "https://github.com/Supervisao-pratica/Rateio/raw/refs/heads/main/RATEIO.xlsm"; 
 
         // =================================================================================
 
-
-        // Componentes UI Básicos
-        const IconWrapper = ({ children, size = 20, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>);
+        // Ícones
+        const IconWrapper = ({ children, size = 18, className="" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>);
         const Save = (p) => <IconWrapper {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></IconWrapper>;
         const Trash2 = (p) => <IconWrapper {...p}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></IconWrapper>;
         const BarChart3 = (p) => <IconWrapper {...p}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></IconWrapper>;
         const Car = (p) => <IconWrapper {...p}><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M2 12h12"/></IconWrapper>;
         const Users = (p) => <IconWrapper {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></IconWrapper>;
         const FileSpreadsheet = (p) => <IconWrapper {...p}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></IconWrapper>;
-        const AlertCircle = (p) => <IconWrapper {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></IconWrapper>;
         const Download = (p) => <IconWrapper {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></IconWrapper>;
         const Database = (p) => <IconWrapper {...p}><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></IconWrapper>;
-        const Github = (p) => <IconWrapper {...p}><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 6 6-6 10-6 10.6a3.8 3.8 0 0 0 1.9-4 1.9-4 0 0 0-2 2 0 1 .8 3 2.8 2 1.9 4 1.9 4 0 0 0-2.8.2 4.8 4.8 0 0 0-3.5-1z"/><path d="M9 22v-4c0-1.1-.9-2-2-2"/></IconWrapper>;
         const Mail = (p) => <IconWrapper {...p}><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></IconWrapper>;
         const Settings = (p) => <IconWrapper {...p}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></IconWrapper>;
-        const RefreshCw = (p) => <IconWrapper {...p}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></IconWrapper>;
+        const Tool = (p) => <IconWrapper {...p}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></IconWrapper>;
+        const Plus = (p) => <IconWrapper {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></IconWrapper>;
+        const MapPin = (p) => <IconWrapper {...p}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></IconWrapper>;
 
         const Card = ({ children, className = "" }) => (<div className={`bg-white rounded-xl shadow-sm border border-gray-100 p-6 ${className}`}>{children}</div>);
-        const calculateDuration = (start, end) => { if (!start || !end) return 0; const [startH, startM] = start.split(':').map(Number); const [endH, endM] = end.split(':').map(Number); let diff = new Date(0, 0, 0, endH, endM) - new Date(0, 0, 0, startH, startM); if (diff < 0) diff += 86400000; return diff / 3600000; };
-        const formatHours = (decimalHours) => { const h = Math.floor(decimalHours); const m = Math.round((decimalHours - h) * 60); return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`; };
+        const calculateDuration = (start, end) => { 
+            if (!start || !end) return 0; 
+            const [startH, startM] = start.split(':').map(Number); 
+            const [endH, endM] = end.split(':').map(Number); 
+            let diff = new Date(0, 0, 0, endH, endM) - new Date(0, 0, 0, startH, startM); 
+            // Se passar da meia noite, adiciona 24h
+            if (diff < 0) diff += 86400000; 
+            return diff / 3600000; 
+        };
+        const formatHours = (decimalHours) => { 
+            const h = Math.floor(decimalHours); 
+            const m = Math.round((decimalHours - h) * 60); 
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`; 
+        };
 
         function App() {
             const [activeTab, setActiveTab] = useState('controle');
-            const [githubUrl, setGithubUrl] = useState(LINK_FIXO_DO_EXCEL || '');
-            const [isLoading, setIsLoading] = useState(false);
             const [showConfig, setShowConfig] = useState(false);
             const [toast, setToast] = useState(null);
 
+            // Dados
             const [costCenters, setCostCenters] = useState([]);
             const [hourBanks, setHourBanks] = useState([]);
-            const [visits, setVisits] = useState([]);
+            const [visits, setVisits] = useState([]); // Array de objetos { type: 'deslocamento' | 'atendimento', ... }
             const [adminEntries, setAdminEntries] = useState([]);
 
+            // Estado para o "Roteiro do Dia"
+            const [routeDate, setRouteDate] = useState('');
+            const [startPoint, setStartPoint] = useState({ city: '', time: '' });
+            const [stops, setStops] = useState([]); // { city: '', arrival: '', departure: '', ccId: '' }
+
+            // Estado de Formulários (Adicionados de volta para corrigir ReferenceError)
             const [newVisit, setNewVisit] = useState({ data: '', turma: '', cidadeOrigem: '', cidadeDestino: '', horarioSaida: '', horarioChegada: '', horarioInicioVisita: '', horarioFimVisita: '', supervisor: '' });
             const [newAdmin, setNewAdmin] = useState({ data: '', turma: '', atividade: '', inicio: '', fim: '', supervisor: '' });
 
-            // Helper para corrigir URL do GitHub
-            const normalizeGithubUrl = (url) => {
-                if (!url) return "";
-                let newUrl = url;
-                // Se o usuário colocar link do tipo 'github.com', forçamos a conversão para raw
-                if (newUrl.includes("github.com") && !newUrl.includes("raw.githubusercontent.com")) {
-                    newUrl = newUrl.replace("github.com", "raw.githubusercontent.com");
-                    // Limpa artefatos de URL que vêm do navegador
-                    newUrl = newUrl.replace("/raw/", "/").replace("/blob/", "/").replace("/refs/heads/", "/");
-                }
-                return newUrl;
-            };
+            const showToast = (msg, type='success') => { setToast({msg, type}); setTimeout(() => setToast(null), 3000); };
 
-            // Toast helper
-            const showToast = (msg, type = 'success') => {
-                setToast({ msg, type });
-                setTimeout(() => setToast(null), 5000);
-            };
-
-            // Processamento do Arquivo Excel
-            const processWorkbook = (wb, source = "upload") => {
-                let counts = { cc: 0, banks: 0, visits: 0, admin: 0 };
-                
-                try {
-                    // 1. Centros de Custo
-                    if (wb.SheetNames.some(n => n.toUpperCase().includes("CC"))) {
-                        const sheet = wb.Sheets[wb.SheetNames.find(n => n.toUpperCase().includes("CC"))];
-                        const data = XLSX.utils.sheet_to_json(sheet);
-                        if (data.length) {
-                            setCostCenters(data.map((r, i) => ({ 
-                                id: i, 
-                                codigo: r['Centro de Custo'] || r['Codigo'] || 'N/A', 
-                                turma: r['Turma'] || r['Nome Turma'] || 'N/A', 
-                                descricao: r['Descrição'] || '' 
-                            })));
-                            counts.cc = data.length;
-                        }
-                    }
-
-                    // 2. Banco de Horas
-                    if (wb.SheetNames.some(n => n.toUpperCase().includes("HORA") || n.toUpperCase().includes("CONTROLE"))) {
-                        const sheet = wb.Sheets[wb.SheetNames.find(n => n.toUpperCase().includes("HORA") || n.toUpperCase().includes("CONTROLE"))];
-                        const data = XLSX.utils.sheet_to_json(sheet);
-                        if (data.length) {
-                            setHourBanks(data.map((r, i) => ({ 
-                                id: i, 
-                                turma: r['Turma'] || r['Nome Turma'] || 'N/A', 
-                                totalHoras: Number(r['Total Horas'] || r['Horas'] || 0) 
-                            })));
-                            counts.banks = data.length;
-                        }
-                    }
-
-                    // 3. Visitas
-                    if (wb.SheetNames.some(n => n.toUpperCase().includes("VISITA"))) {
-                        const sheet = wb.Sheets[wb.SheetNames.find(n => n.toUpperCase().includes("VISITA"))];
-                        const data = XLSX.utils.sheet_to_json(sheet);
-                        if (data.length) {
-                            setVisits(prev => {
-                                const newItems = data.map((r, i) => ({ 
-                                    id: Date.now() + i, 
-                                    data: r['Data'] || '', 
-                                    turma: r['Turma'] || '', 
-                                    cidadeOrigem: r['Origem'] || '', 
-                                    cidadeDestino: r['Destino'] || '', 
-                                    horarioSaida: r['Saída'] || '', 
-                                    horarioChegada: r['Chegada'] || '', 
-                                    horarioInicioVisita: r['Início Visita'] || '', 
-                                    horarioFimVisita: r['Fim Visita'] || '', 
-                                    supervisor: r['Supervisor'] || '' 
-                                }));
-                                return [...newItems];
-                            });
-                            counts.visits = data.length;
-                        }
-                    }
-
-                    // 4. Admin
-                    if (wb.SheetNames.some(n => n.toUpperCase().includes("ADMIN"))) {
-                        const sheet = wb.Sheets[wb.SheetNames.find(n => n.toUpperCase().includes("ADMIN"))];
-                        const data = XLSX.utils.sheet_to_json(sheet);
-                        if (data.length) {
-                            setAdminEntries(prev => {
-                                const newItems = data.map((r, i) => ({ 
-                                    id: Date.now() + i + 5000, 
-                                    data: r['Data'] || '', 
-                                    turma: r['Turma'] || '', 
-                                    atividade: r['Atividade'] || '', 
-                                    inicio: r['Início'] || '', 
-                                    fim: r['Fim'] || '', 
-                                    supervisor: r['Supervisor'] || '' 
-                                }));
-                                return [...newItems];
-                            });
-                            counts.admin = data.length;
-                        }
-                    }
-
-                    if (source === "github") {
-                        showToast(`Sincronizado: ${counts.cc} CCs, ${counts.visits} Visitas.`, 'success');
-                    } else {
-                        alert(`Arquivo carregado!\nCCs: ${counts.cc}\nVisitas: ${counts.visits}`);
-                    }
-                } catch (e) {
-                    console.error("Erro ao processar abas:", e);
-                    showToast("Erro ao ler abas do Excel. Verifique o formato.", "error");
-                }
-            };
-
-            const fetchFromGithub = async (rawUrl) => {
-                let url = normalizeGithubUrl(rawUrl);
-                
-                if (!url || url.includes("SEU_USUARIO")) {
-                    console.log("URL de GitHub inválida ou padrão.");
-                    return;
-                }
-                
-                setIsLoading(true);
-                try {
-                    // Verifica lib
-                    if (typeof XLSX === 'undefined') {
-                        throw new Error("Biblioteca Excel carregando...");
-                    }
-
-                    const response = await fetch(url);
-                    if (!response.ok) {
-                        if (response.status === 404 || response.status === 403) {
-                             throw new Error(`Erro ${response.status}: Arquivo não encontrado ou REPOSITÓRIO PRIVADO.`);
-                        }
-                        throw new Error(`Falha ao baixar (${response.status}).`);
-                    }
-                    
-                    const arrayBuffer = await response.arrayBuffer();
-                    const wb = XLSX.read(arrayBuffer, { type: 'array' });
-                    
-                    processWorkbook(wb, "github");
-                    localStorage.setItem('rateio_github_url', url);
-                    
-                } catch (error) {
-                    console.error("Erro GitHub:", error);
-                    let msg = error.message;
-                    if (msg.includes("Failed to fetch")) {
-                        msg = "Falha de Conexão: Repositório PRIVADO ou erro de rede. Use Upload Manual.";
-                    }
-                    showToast(msg, 'error');
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-
-            // Inicialização
+            // Inicialização Automática (Se tiver link)
             useEffect(() => {
                 const init = async () => {
-                    await new Promise(r => setTimeout(r, 1000)); // Espera libs
-                    
-                    let targetUrl = normalizeGithubUrl(LINK_FIXO_DO_EXCEL);
-                    const saved = localStorage.getItem('rateio_github_url');
-
-                    if (targetUrl && !targetUrl.includes("SEU_USUARIO")) {
-                        await fetchFromGithub(targetUrl);
-                    } else if (saved) {
-                        setGithubUrl(saved);
-                        await fetchFromGithub(saved);
-                    }
+                   if (LINK_FIXO_DO_EXCEL && !LINK_FIXO_DO_EXCEL.includes("SEU_USUARIO")) {
+                       try {
+                           const resp = await fetch(LINK_FIXO_DO_EXCEL.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/").replace("/raw/", "/"));
+                           if(resp.ok) {
+                               const ab = await resp.arrayBuffer();
+                               const wb = XLSX.read(ab, { type: 'array' });
+                               processWorkbook(wb, 'auto');
+                           }
+                       } catch(e) { console.log("Erro auto load", e); }
+                   }
                 };
                 init();
             }, []);
 
-            // Cálculos
-            const consumptionByClass = useMemo(() => {
-                const summary = {};
-                hourBanks.forEach(bank => summary[bank.turma] = { total: bank.totalHoras, used: 0, details: { deslocamento: 0, visita: 0, admin: 0 } });
-                
-                visits.forEach(v => {
-                    if (summary[v.turma]) {
-                        const d = calculateDuration(v.horarioSaida, v.horarioChegada);
-                        const vi = calculateDuration(v.horarioInicioVisita, v.horarioFimVisita);
-                        summary[v.turma].used += (d + vi);
-                        summary[v.turma].details.deslocamento += d;
-                        summary[v.turma].details.visita += vi;
-                    }
-                });
-                
-                adminEntries.forEach(a => {
-                    if (summary[a.turma]) {
-                        const dur = calculateDuration(a.inicio, a.fim);
-                        summary[a.turma].used += dur;
-                        summary[a.turma].details.admin += dur;
-                    }
-                });
-                return summary;
-            }, [hourBanks, visits, adminEntries]);
+            // Processamento do Excel (Lógica Ajustada)
+            const processWorkbook = (wb, source) => {
+                let counts = { cc: 0, banks: 0 };
 
-            // Handlers
+                // 1. Processar CCs (Aba 'CC', Col A=Turma, Col B=CC)
+                if (wb.SheetNames.some(n => n.includes("CC"))) {
+                    const ws = wb.Sheets[wb.SheetNames.find(n => n.includes("CC"))];
+                    // Ler como array de arrays para pegar colunas fixas A e B
+                    const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+                    const mapped = [];
+                    // Começa linha 1 se tiver cabeçalho na linha 0
+                    for(let i=1; i < data.length; i++) {
+                        const row = data[i];
+                        if(row && row.length >= 2) {
+                            const turma = row[0]; // Coluna A
+                            const codigo = row[1]; // Coluna B
+                            const desc = row[2] || ''; // Coluna C (opcional)
+                            if(turma && codigo) {
+                                mapped.push({ id: i, turma: String(turma).trim(), codigo: String(codigo).trim(), descricao: String(desc).trim() });
+                            }
+                        }
+                    }
+                    if(mapped.length > 0) {
+                        setCostCenters(mapped);
+                        counts.cc = mapped.length;
+                    }
+                }
+
+                // 2. Processar Horas (Aba 'CONTROLE DE HORAS...', Turmas linha 5 em diante, Col J=Total)
+                const horaSheetName = wb.SheetNames.find(n => n.toUpperCase().includes("CONTROLE") || n.toUpperCase().includes("HORA"));
+                if (horaSheetName) {
+                    const ws = wb.Sheets[horaSheetName];
+                    const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+                    const mapped = [];
+                    // "iniciando na linha 5" -> índice 4 do array
+                    for(let i=4; i < data.length; i++) {
+                        const row = data[i];
+                        // Assumindo que o nome da Turma está na Coluna A (índice 0) ou B (índice 1). Vamos tentar A.
+                        // Coluna J é índice 9.
+                        if(row) {
+                            const turma = row[0]; // Coluna A
+                            const total = row[9]; // Coluna J
+                            if(turma && typeof total === 'number') {
+                                mapped.push({ id: i, turma: String(turma).trim(), totalHoras: total });
+                            }
+                        }
+                    }
+                    if(mapped.length > 0) {
+                        setHourBanks(mapped);
+                        counts.banks = mapped.length;
+                    }
+                }
+
+                if (source === 'manual') showToast(`Sucesso! CCs: ${counts.cc}, Turmas: ${counts.banks}`);
+            };
+
             const handleManualUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
                 reader.onload = (evt) => {
                     const wb = XLSX.read(evt.target.result, { type: 'binary' });
-                    processWorkbook(wb, "manual");
+                    processWorkbook(wb, 'manual');
                 };
                 reader.readAsBinaryString(file);
             };
 
-            const addVisit = () => { if (!newVisit.turma || !newVisit.data) return alert("Preencha dados"); setVisits([...visits, { ...newVisit, id: Date.now() }]); setNewVisit({ ...newVisit, horarioSaida: '', horarioChegada: '', horarioInicioVisita: '', horarioFimVisita: '' }); showToast("Visita adicionada"); };
-            const addAdmin = () => { if (!newAdmin.turma || !newAdmin.data) return alert("Preencha dados"); setAdminEntries([...adminEntries, { ...newAdmin, id: Date.now() }]); setNewAdmin({ ...newAdmin, inicio: '', fim: '' }); showToast("Admin adicionado"); };
+            // --- Lógica de Roteiro ---
             
+            const addStop = () => {
+                setStops([...stops, { id: Date.now(), city: '', arrival: '', departure: '', ccId: '' }]);
+            };
+
+            const removeStop = (id) => {
+                setStops(stops.filter(s => s.id !== id));
+            };
+
+            const updateStop = (id, field, value) => {
+                setStops(stops.map(s => s.id === id ? { ...s, [field]: value } : s));
+            };
+
+            const saveRoute = () => {
+                if (!routeDate || !startPoint.city || !startPoint.time) return alert("Preencha a data e o ponto de partida.");
+                if (stops.length === 0) return alert("Adicione pelo menos um destino.");
+
+                const newEntries = [];
+                let lastCity = startPoint.city;
+                let lastTime = startPoint.time;
+
+                stops.forEach(stop => {
+                    if (!stop.city || !stop.arrival || !stop.ccId) return; // Validação básica
+
+                    // 1. Gerar Deslocamento (Saída Anterior -> Chegada Atual)
+                    // Vinculado ao CC do destino (pois está indo para lá)
+                    const travelTime = calculateDuration(lastTime, stop.arrival);
+                    if (travelTime > 0) {
+                        newEntries.push({
+                            id: Date.now() + Math.random(),
+                            type: 'deslocamento',
+                            data: routeDate,
+                            origem: lastCity,
+                            destino: stop.city,
+                            inicio: lastTime,
+                            fim: stop.arrival,
+                            turma: stop.ccId, // ID da turma/cc selecionado
+                            horas: travelTime
+                        });
+                    }
+
+                    // 2. Gerar Atendimento (Chegada Atual -> Saída Atual)
+                    // Somente se houver horário de saída preenchido e for maior que chegada
+                    if (stop.departure) {
+                        const workTime = calculateDuration(stop.arrival, stop.departure);
+                        if (workTime > 0) {
+                            newEntries.push({
+                                id: Date.now() + Math.random(),
+                                type: 'atendimento',
+                                data: routeDate,
+                                local: stop.city,
+                                inicio: stop.arrival,
+                                fim: stop.departure,
+                                turma: stop.ccId,
+                                horas: workTime
+                            });
+                        }
+                        // Atualizar ponteiros para o próximo trecho
+                        lastTime = stop.departure;
+                    } else {
+                        // Se não tiver saída (última parada só chegada?), o próximo trecho usaria a chegada (estranho, mas seguro)
+                        lastTime = stop.arrival; 
+                    }
+                    lastCity = stop.city;
+                });
+
+                setVisits([...visits, ...newEntries]);
+                showToast(`${newEntries.length} lançamentos gerados com sucesso!`);
+                // Limpar form
+                setStops([]);
+                setStartPoint({ city: '', time: '' });
+            };
+
+            const addAdmin = () => {
+                if (!newAdmin.turma || !newAdmin.data) return alert("Preencha os dados obrigatórios");
+                setAdminEntries([...adminEntries, { ...newAdmin, id: Date.now() }]);
+                setNewAdmin({ ...newAdmin, inicio: '', fim: '' });
+                showToast("Lançamento administrativo salvo!");
+            };
+
+            // --- Cálculos de Consumo ---
+            const consumptionByClass = useMemo(() => {
+                const summary = {};
+                hourBanks.forEach(bank => summary[bank.turma] = { total: bank.totalHoras, used: 0, details: { deslocamento: 0, atendimento: 0, admin: 0 } });
+                
+                // Somar Visitas (que agora contém deslocamento e atendimento)
+                visits.forEach(v => {
+                    // v.turma aqui guarda o ID do CC selecionado no select, precisamos achar o nome da turma
+                    const ccObj = costCenters.find(c => c.id == v.turma); 
+                    const turmaName = ccObj ? ccObj.turma : v.turma; // Fallback se já for string
+                    
+                    if (summary[turmaName]) {
+                        summary[turmaName].used += v.horas;
+                        if (v.type === 'deslocamento') summary[turmaName].details.deslocamento += v.horas;
+                        if (v.type === 'atendimento') summary[turmaName].details.atendimento += v.horas;
+                    }
+                });
+
+                adminEntries.forEach(a => {
+                     // Lógica similar para admin se tiver turma
+                     const ccObj = costCenters.find(c => c.turma === a.turma); // Admin já salva o nome direto geralmente
+                     const turmaName = a.turma;
+                     if (summary[turmaName]) {
+                         const dur = calculateDuration(a.inicio, a.fim);
+                         summary[turmaName].used += dur;
+                         summary[turmaName].details.admin += dur;
+                     }
+                });
+                
+                return summary;
+            }, [hourBanks, visits, adminEntries, costCenters]);
+
+            // --- Renderizadores ---
+
+            const renderVisitas = () => (
+                <div className="space-y-6">
+                    <Card className="border-l-4 border-blue-500">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-lg flex items-center gap-2"><MapPin className="text-blue-600"/> Criador de Roteiro Diário</h3>
+                            <input type="date" className="p-2 border rounded font-bold text-gray-700" value={routeDate} onChange={e => setRouteDate(e.target.value)} />
+                        </div>
+                        
+                        {/* Ponto de Partida */}
+                        <div className="p-4 bg-gray-50 rounded-lg mb-4 border border-gray-200">
+                            <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Ponto de Partida (Início do Dia)</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                                <input type="text" placeholder="Cidade de Origem (ex: Curitiba)" className="p-2 border rounded" value={startPoint.city} onChange={e => setStartPoint({...startPoint, city: e.target.value})} />
+                                <input type="time" title="Horário de Saída" className="p-2 border rounded" value={startPoint.time} onChange={e => setStartPoint({...startPoint, time: e.target.value})} />
+                            </div>
+                        </div>
+
+                        {/* Paradas */}
+                        <div className="space-y-3 mb-4">
+                            {stops.map((stop, idx) => (
+                                <div key={stop.id} className="p-4 bg-white border border-blue-100 rounded-lg shadow-sm relative">
+                                    <div className="absolute -left-3 top-1/2 -translate-y-1/2 bg-blue-100 text-blue-600 rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">{idx+1}</div>
+                                    <button onClick={() => removeStop(stop.id)} className="absolute top-2 right-2 text-red-400 hover:text-red-600"><Trash2 size={16}/></button>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                        <div className="col-span-1">
+                                            <label className="text-xs text-gray-500">Cidade Destino</label>
+                                            <input type="text" placeholder="Cidade" className="w-full p-2 border rounded" value={stop.city} onChange={e => updateStop(stop.id, 'city', e.target.value)} />
+                                        </div>
+                                        <div className="col-span-1">
+                                            <label className="text-xs text-gray-500">Chegada</label>
+                                            <input type="time" className="w-full p-2 border rounded" value={stop.arrival} onChange={e => updateStop(stop.id, 'arrival', e.target.value)} />
+                                        </div>
+                                        <div className="col-span-1">
+                                            <label className="text-xs text-gray-500">Saída (Fim atend.)</label>
+                                            <input type="time" className="w-full p-2 border rounded" value={stop.departure} onChange={e => updateStop(stop.id, 'departure', e.target.value)} />
+                                        </div>
+                                        <div className="col-span-1">
+                                            <label className="text-xs text-gray-500">Vincular a Turma/CC</label>
+                                            <select className="w-full p-2 border rounded text-sm" value={stop.ccId} onChange={e => updateStop(stop.id, 'ccId', e.target.value)}>
+                                                <option value="">Selecione...</option>
+                                                {costCenters.map(cc => (
+                                                    <option key={cc.id} value={cc.id}>{cc.turma} - {cc.codigo}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="mt-2 text-xs text-gray-400 flex gap-4">
+                                        <span>Deslocamento: {startPoint.time && stop.arrival ? formatHours(calculateDuration(idx === 0 ? startPoint.time : stops[idx-1].departure, stop.arrival)) + 'h' : '--:--'}</span>
+                                        <span>Atendimento: {stop.arrival && stop.departure ? formatHours(calculateDuration(stop.arrival, stop.departure)) + 'h' : '--:--'}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="flex gap-2">
+                            <button onClick={addStop} className="flex-1 py-2 border-2 border-dashed border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 font-semibold flex justify-center items-center gap-2"><Plus size={18}/> Adicionar Destino</button>
+                            <button onClick={saveRoute} className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold flex justify-center items-center gap-2"><Save size={18}/> Processar Roteiro</button>
+                        </div>
+                    </Card>
+
+                    {/* Histórico Consolidado */}
+                    <Card>
+                        <h3 className="font-bold text-gray-700 mb-2">Histórico de Atividades</h3>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left table-tiny">
+                                <thead className="bg-gray-100 text-gray-600">
+                                    <tr>
+                                        <th>Tipo</th>
+                                        <th>Data</th>
+                                        <th>Detalhe (Rota/Local)</th>
+                                        <th>Horário</th>
+                                        <th>Turma</th>
+                                        <th>Total</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {visits.map(v => {
+                                        const cc = costCenters.find(c => c.id == v.turma);
+                                        const turmaDisplay = cc ? cc.turma : 'N/A';
+                                        return (
+                                            <tr key={v.id} className="border-b hover:bg-gray-50">
+                                                <td className="p-2">
+                                                    {v.type === 'deslocamento' 
+                                                        ? <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800"><Car size={14} className="mr-1"/> Desloc.</span>
+                                                        : <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800"><Tool size={14} className="mr-1"/> Atend.</span>
+                                                    }
+                                                </td>
+                                                <td>{v.data}</td>
+                                                <td className="text-gray-600">
+                                                    {v.type === 'deslocamento' ? `${v.origem} ➝ ${v.destino}` : v.local}
+                                                </td>
+                                                <td className="text-xs font-mono">{v.inicio} - {v.fim}</td>
+                                                <td className="text-xs">{turmaDisplay}</td>
+                                                <td className="font-bold">{formatHours(v.horas)}</td>
+                                                <td><button onClick={() => setVisits(visits.filter(x => x.id !== v.id))} className="text-red-400 hover:text-red-600"><Trash2 size={14}/></button></td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </Card>
+                </div>
+            );
+
+            const renderControle = () => (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {hourBanks.map(bank => {
+                        const stats = consumptionByClass[bank.turma] || { used: 0, total: bank.totalHoras };
+                        const percentage = bank.totalHoras > 0 ? Math.min((stats.used / bank.totalHoras) * 100, 100) : 0;
+                        const saldo = bank.totalHoras - stats.used;
+                        return (
+                            <Card key={bank.id} className="border-l-4 border-l-blue-500">
+                                <div className="flex justify-between items-start mb-2">
+                                    <div><h3 className="font-bold text-lg">{bank.turma}</h3><p className="text-xs text-gray-500">Meta: {formatHours(bank.totalHoras)}h</p></div>
+                                    <button onClick={() => {}} className="p-2 rounded-full bg-gray-100 hover:bg-blue-100"><Mail size={16} /></button>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2 mt-2"><div className={`h-2 rounded-full ${saldo < 0 ? 'bg-red-500' : 'bg-blue-600'}`} style={{ width: `${percentage}%` }}></div></div>
+                                <div className="flex justify-between text-xs mt-2 font-medium">
+                                    <span className="text-gray-600">Usado: {formatHours(stats.used)}h</span>
+                                    <span className={saldo < 0 ? 'text-red-600' : 'text-green-600'}>Saldo: {formatHours(saldo)}h</span>
+                                </div>
+                            </Card>
+                        );
+                    })}
+                </div>
+            );
+
+            const renderAdmin = () => (
+                <div className="space-y-6">
+                    <Card>
+                        <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Users className="text-purple-600"/> Lançamento Administrativo</h3>
+                        <div className="grid grid-cols-1 gap-4 mb-4">
+                            <input type="date" className="p-2 border rounded" value={newAdmin.data} onChange={e => setNewAdmin({...newAdmin, data: e.target.value})} />
+                            <select className="p-2 border rounded" value={newAdmin.turma} onChange={e => setNewAdmin({...newAdmin, turma: e.target.value})}><option value="">Selecione Turma...</option>{costCenters.map(cc => <option key={cc.id} value={cc.turma}>{cc.turma}</option>)}</select>
+                            <input type="text" placeholder="Atividade" className="p-2 border rounded" value={newAdmin.atividade} onChange={e => setNewAdmin({...newAdmin, atividade: e.target.value})} />
+                            <div className="flex gap-4"><input type="time" className="p-2 border rounded flex-1" value={newAdmin.inicio} onChange={e => setNewAdmin({...newAdmin, inicio: e.target.value})} /><input type="time" className="p-2 border rounded flex-1" value={newAdmin.fim} onChange={e => setNewAdmin({...newAdmin, fim: e.target.value})} /></div>
+                        </div>
+                        <button onClick={addAdmin} className="w-full bg-purple-600 text-white py-2 rounded hover:bg-purple-700 flex justify-center items-center gap-2"><Save size={18} /> Salvar</button>
+                    </Card>
+                    <Card>
+                        <table className="w-full text-sm text-left"><thead className="bg-gray-100"><tr><th className="p-2">Data</th><th className="p-2">Ativ.</th><th className="p-2">Total</th><th></th></tr></thead>
+                        <tbody>{adminEntries.map(a => <tr key={a.id} className="border-b"><td className="p-2">{a.data}</td><td className="p-2">{a.atividade}</td><td className="p-2 font-bold">{formatHours(calculateDuration(a.inicio, a.fim))}</td><td><button onClick={() => setAdminEntries(adminEntries.filter(x => x.id !== a.id))} className="text-red-400"><Trash2 size={14}/></button></td></tr>)}</tbody></table>
+                    </Card>
+                </div>
+            );
+
+            const renderCC = () => (
+                <Card>
+                    <h3 className="font-bold text-lg mb-4">Centros de Custo (Carregados)</h3>
+                    <div className="overflow-x-auto max-h-96">
+                        <table className="w-full text-left border-collapse text-sm">
+                            <thead><tr className="bg-gray-100 sticky top-0"><th className="p-2 border-b">Turma (Col A)</th><th className="p-2 border-b">CC (Col B)</th><th className="p-2 border-b">Descrição</th></tr></thead>
+                            <tbody>{costCenters.map(cc => <tr key={cc.id} className="border-b hover:bg-gray-50"><td className="p-2 font-bold text-gray-700">{cc.turma}</td><td className="p-2 font-mono text-blue-600">{cc.codigo}</td><td className="p-2 text-gray-500">{cc.descricao}</td></tr>)}</tbody>
+                        </table>
+                    </div>
+                </Card>
+            );
+
             const exportData = () => {
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(costCenters), "CC");
-                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hourBanks), "CONTROLE DE HORAS");
-                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(visits), "RATEIO - VISITAS");
-                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(adminEntries), "RATEIO - ADMINISTRATIVO");
-                XLSX.writeFile(wb, "Atualizado_Rateio.xlsx");
-            };
-
-            const sendEmail = (turma) => {
-                const s = consumptionByClass[turma] || { total: 0, used: 0 };
-                const saldo = s.total - s.used;
-                let body = `Resumo ${turma}\n\nContratado: ${formatHours(s.total)}h\nUsado: ${formatHours(s.used)}h\nSaldo: ${formatHours(saldo)}h\n\n`;
-                visits.filter(v => v.turma === turma).forEach(v => body += `- ${v.data}: ${v.cidadeOrigem}->${v.cidadeDestino} (${formatHours(calculateDuration(v.horarioSaida, v.horarioChegada)+calculateDuration(v.horarioInicioVisita, v.horarioFimVisita))}h)\n`);
-                window.location.href = `mailto:?subject=Rateio ${turma}&body=${encodeURIComponent(body)}`;
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hourBanks), "HORAS");
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(visits), "VISITAS");
+                XLSX.writeFile(wb, "Backup_Sistema.xlsx");
             };
 
             return (
                 <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans text-gray-800">
-                    {/* Loading Overlay */}
-                    {isLoading && (
-                        <div className="loading-overlay">
-                            <div className="spinner"></div>
-                            <p className="mt-4 text-gray-600 font-bold">Conectando ao GitHub...</p>
-                        </div>
-                    )}
-
-                    {/* Toast Notification */}
-                    {toast && (
-                        <div className={`toast ${toast.type === 'error' ? 'toast-error' : 'toast-success'}`}>
-                            {toast.msg}
-                        </div>
-                    )}
-
+                    {toast && <div className={`toast ${toast.type === 'error' ? 'toast-error' : 'toast-success'}`}>{toast.msg}</div>}
+                    
                     <div className="max-w-6xl mx-auto mb-6">
                         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
-                            <div><h1 className="text-2xl font-bold text-gray-900">Sistema de Rateio</h1><p className="text-gray-500 text-sm">Integração GitHub Automática</p></div>
+                            <div><h1 className="text-2xl font-bold text-gray-900">Sistema de Rateio</h1><p className="text-gray-500 text-sm">Gestão de Horas e Roteiros</p></div>
                             <div className="flex gap-2">
-                                <button onClick={() => fetchFromGithub(githubUrl || LINK_FIXO_DO_EXCEL)} className="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2" title="Forçar Atualização"><RefreshCw size={18} /> Atualizar</button>
-                                <button onClick={() => setShowConfig(!showConfig)} className="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 flex items-center gap-2"><Settings size={18} /> {showConfig ? 'Fechar' : 'Config'}</button>
-                                <button onClick={exportData} className="bg-green-700 text-white px-4 py-2 rounded-lg shadow hover:bg-green-800 flex items-center gap-2"><Download size={18} /> Salvar/Exportar</button>
+                                <button onClick={() => setShowConfig(!showConfig)} className="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 flex items-center gap-2"><Settings size={18} /> Dados</button>
+                                <button onClick={exportData} className="bg-green-700 text-white px-4 py-2 rounded-lg shadow hover:bg-green-800 flex items-center gap-2"><Download size={18} /> Backup</button>
                             </div>
                         </div>
 
                         {showConfig && (
                             <Card className="mb-6 bg-slate-50 border-slate-200">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div>
-                                        <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><Github size={18}/> Link do Arquivo</h4>
-                                        <div className="flex gap-2">
-                                            <input type="text" placeholder="https://raw.github..." className="flex-1 p-2 border rounded text-sm" value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} />
-                                            <button onClick={() => fetchFromGithub(githubUrl)} className="bg-black text-white px-3 py-2 rounded hover:bg-gray-800 text-sm">Testar</button>
-                                        </div>
-                                        <p className="text-xs text-gray-500 mt-2"><b>Atenção:</b> Se o erro "Failed to fetch" persistir, seu repositório é <b>PRIVADO</b>. Torne-o Público ou use Upload Manual.</p>
-                                    </div>
-                                    <div className="border-l pl-6 border-gray-200">
-                                        <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><FileSpreadsheet size={18}/> Upload Manual (Garantido)</h4>
-                                        <div className="relative"><input type="file" accept=".xlsx, .xlsm" onChange={handleManualUpload} className="absolute inset-0 w-full opacity-0 cursor-pointer" /><button className="w-full bg-gray-100 text-gray-700 py-2 rounded text-xs font-bold hover:bg-gray-200 border border-gray-300">Selecionar Arquivo do Computador</button></div>
-                                    </div>
-                                </div>
+                                <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><FileSpreadsheet size={18}/> Importar Planilha Mestra</h4>
+                                <p className="text-xs text-gray-500 mb-2">Importe o arquivo RATEIO.xlsm para atualizar CCs e Horas.</p>
+                                <div className="relative"><input type="file" accept=".xlsx,.xlsm" onChange={handleManualUpload} className="absolute inset-0 w-full opacity-0 cursor-pointer" /><button className="w-full bg-white border border-gray-300 text-gray-700 py-2 rounded text-xs font-bold hover:bg-gray-50">Selecionar Arquivo</button></div>
                             </Card>
                         )}
                     </div>
 
                     <div className="max-w-6xl mx-auto bg-white rounded-lg shadow-sm p-1 mb-6 flex overflow-x-auto">
-                        {[{ id: 'controle', icon: BarChart3, label: 'Geral' }, { id: 'visitas', icon: Car, label: 'Visitas' }, { id: 'admin', icon: Users, label: 'Admin' }, { id: 'cc', icon: Database, label: 'CCs' }].map(tab => (
+                        {[{ id: 'controle', icon: BarChart3, label: 'Painel Geral' }, { id: 'visitas', icon: MapPin, label: 'Roteiro de Visitas' }, { id: 'admin', icon: Users, label: 'Administrativo' }, { id: 'cc', icon: Database, label: 'Ver CCs' }].map(tab => (
                             <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-md transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-blue-50 text-blue-600 font-bold shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>
                                 <tab.icon size={18} /> {tab.label}
                             </button>
@@ -364,85 +496,10 @@
                     </div>
 
                     <div className="max-w-6xl mx-auto">
-                        {activeTab === 'controle' && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {hourBanks.length === 0 && !isLoading && <div className="p-8 bg-yellow-50 text-yellow-800 rounded col-span-full border border-yellow-200 text-center">
-                                    <AlertCircle className="mx-auto mb-2" size={32}/>
-                                    <h3 className="font-bold">Aguardando Dados</h3>
-                                    <p className="text-sm">Se o carregamento automático falhou, use o botão <b>Config > Upload Manual</b>.</p>
-                                </div>}
-                                {hourBanks.map(bank => {
-                                    const stats = consumptionByClass[bank.turma] || { used: 0, total: bank.totalHoras };
-                                    const percentage = bank.totalHoras > 0 ? Math.min((stats.used / bank.totalHoras) * 100, 100) : 0;
-                                    const saldo = bank.totalHoras - stats.used;
-                                    return (
-                                        <Card key={bank.id} className="border-l-4 border-l-blue-500">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div><h3 className="font-bold text-lg">{bank.turma}</h3><p className="text-sm text-gray-500">{formatHours(bank.totalHoras)}h</p></div>
-                                                <button onClick={() => sendEmail(bank.turma)} className="p-2 rounded-full bg-gray-100 hover:bg-blue-100" title="Enviar Relatório"><Mail size={18} /></button>
-                                            </div>
-                                            <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2"><div className={`h-2.5 rounded-full ${saldo < 0 ? 'bg-red-500' : 'bg-blue-600'}`} style={{ width: `${percentage}%` }}></div></div>
-                                            <div className="flex justify-between text-sm mt-1"><span>Usado: {formatHours(stats.used)}h</span><span className={saldo < 0 ? 'text-red-500 font-bold' : 'text-green-600 font-bold'}>Saldo: {formatHours(saldo)}h</span></div>
-                                        </Card>
-                                    );
-                                })}
-                            </div>
-                        )}
-                        {activeTab === 'visitas' && (
-                            <div className="space-y-6">
-                                <Card>
-                                    <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Car className="text-blue-600"/> Nova Visita</h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                                        <input type="date" className="p-2 border rounded" value={newVisit.data} onChange={e => setNewVisit({...newVisit, data: e.target.value})} />
-                                        <select className="p-2 border rounded" value={newVisit.turma} onChange={e => setNewVisit({...newVisit, turma: e.target.value})}><option value="">Turma...</option>{costCenters.map(cc => <option key={cc.id} value={cc.turma}>{cc.turma}</option>)}</select>
-                                        <input type="text" placeholder="Origem" className="p-2 border rounded" value={newVisit.cidadeOrigem} onChange={e => setNewVisit({...newVisit, cidadeOrigem: e.target.value})} />
-                                        <input type="text" placeholder="Destino" className="p-2 border rounded" value={newVisit.cidadeDestino} onChange={e => setNewVisit({...newVisit, cidadeDestino: e.target.value})} />
-                                    </div>
-                                    <div className="grid grid-cols-4 gap-4 mb-4">
-                                        <input type="time" title="Saída" className="p-2 border rounded" value={newVisit.horarioSaida} onChange={e => setNewVisit({...newVisit, horarioSaida: e.target.value})} />
-                                        <input type="time" title="Chegada" className="p-2 border rounded" value={newVisit.horarioChegada} onChange={e => setNewVisit({...newVisit, horarioChegada: e.target.value})} />
-                                        <input type="time" title="Início Visita" className="p-2 border rounded" value={newVisit.horarioInicioVisita} onChange={e => setNewVisit({...newVisit, horarioInicioVisita: e.target.value})} />
-                                        <input type="time" title="Fim Visita" className="p-2 border rounded" value={newVisit.horarioFimVisita} onChange={e => setNewVisit({...newVisit, horarioFimVisita: e.target.value})} />
-                                    </div>
-                                    <input type="text" placeholder="Supervisor" className="p-2 border rounded w-full mb-4" value={newVisit.supervisor} onChange={e => setNewVisit({...newVisit, supervisor: e.target.value})} />
-                                    <button onClick={addVisit} className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 flex justify-center items-center gap-2"><Save size={18} /> Salvar</button>
-                                </Card>
-                                <Card>
-                                    <table className="w-full text-sm text-left"><thead className="bg-gray-100"><tr><th className="p-2">Data</th><th className="p-2">Rota</th><th className="p-2">Total</th><th className="p-2">Del</th></tr></thead>
-                                    <tbody>{visits.map(v => {
-                                        const total = calculateDuration(v.horarioSaida, v.horarioChegada) + calculateDuration(v.horarioInicioVisita, v.horarioFimVisita);
-                                        return <tr key={v.id} className="border-b"><td className="p-2">{v.data}</td><td className="p-2">{v.cidadeOrigem}→{v.cidadeDestino}</td><td className="p-2 font-bold">{formatHours(total)}</td><td className="p-2"><button onClick={() => setVisits(visits.filter(i => i.id !== v.id))} className="text-red-500"><Trash2 size={16} /></button></td></tr>
-                                    })}</tbody></table>
-                                </Card>
-                            </div>
-                        )}
-                        {activeTab === 'admin' && (
-                            <div className="space-y-6">
-                                <Card>
-                                    <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Users className="text-purple-600"/> Admin</h3>
-                                    <div className="grid grid-cols-1 gap-4 mb-4">
-                                        <input type="date" className="p-2 border rounded" value={newAdmin.data} onChange={e => setNewAdmin({...newAdmin, data: e.target.value})} />
-                                        <select className="p-2 border rounded" value={newAdmin.turma} onChange={e => setNewAdmin({...newAdmin, turma: e.target.value})}><option value="">Turma...</option>{costCenters.map(cc => <option key={cc.id} value={cc.turma}>{cc.turma}</option>)}</select>
-                                        <input type="text" placeholder="Atividade" className="p-2 border rounded" value={newAdmin.atividade} onChange={e => setNewAdmin({...newAdmin, atividade: e.target.value})} />
-                                        <div className="flex gap-4"><input type="time" className="p-2 border rounded flex-1" value={newAdmin.inicio} onChange={e => setNewAdmin({...newAdmin, inicio: e.target.value})} /><input type="time" className="p-2 border rounded flex-1" value={newAdmin.fim} onChange={e => setNewAdmin({...newAdmin, fim: e.target.value})} /></div>
-                                    </div>
-                                    <button onClick={addAdmin} className="w-full bg-purple-600 text-white py-2 rounded hover:bg-purple-700 flex justify-center items-center gap-2"><Save size={18} /> Salvar</button>
-                                </Card>
-                                <Card>
-                                    <table className="w-full text-sm text-left"><thead className="bg-gray-100"><tr><th className="p-2">Data</th><th className="p-2">Ativ.</th><th className="p-2">Total</th><th className="p-2">Del</th></tr></thead>
-                                    <tbody>{adminEntries.map(a => <tr key={a.id} className="border-b"><td className="p-2">{a.data}</td><td className="p-2">{a.atividade}</td><td className="p-2 font-bold">{formatHours(calculateDuration(a.inicio, a.fim))}</td><td className="p-2"><button onClick={() => setAdminEntries(adminEntries.filter(i => i.id !== a.id))} className="text-red-500"><Trash2 size={16} /></button></td></tr>)}</tbody></table>
-                                </Card>
-                            </div>
-                        )}
-                        {activeTab === 'cc' && (
-                            <Card>
-                                <h3 className="font-bold text-lg mb-4">Centros de Custo</h3>
-                                <table className="w-full text-left border-collapse">
-                                    <thead><tr className="bg-gray-100"><th className="p-3 border-b">CC</th><th className="p-3 border-b">Turma</th></tr></thead>
-                                    <tbody>{costCenters.map(cc => <tr key={cc.id} className="border-b"><td className="p-3 font-mono text-blue-600 font-bold">{cc.codigo}</td><td className="p-3">{cc.turma}</td></tr>)}</tbody>
-                                </table>
-                            </Card>
-                        )}
+                        {activeTab === 'controle' && renderControle()}
+                        {activeTab === 'visitas' && renderVisitas()}
+                        {activeTab === 'admin' && renderAdmin()}
+                        {activeTab === 'cc' && renderCC()}
                     </div>
                 </div>
             );
