@@ -156,10 +156,11 @@
                     }
                 }
 
-                // 2. Processar Horas (Aba Específica "CONTROLE DE HORAS POR TURMA PR")
-                // Busca por nome exato ou fuzzy
+                // 2. Processar Horas (Aba Específica "CONTROLE DE HORAS - TURMAS PR" ou similar)
+                // LÓGICA HORIZONTAL: Linha 1 = Turmas, Linha 4 = Total Horas
                 const horaSheetName = wb.SheetNames.find(n => 
-                    n.toUpperCase().trim() === "CONTROLE DE HORAS POR TURMA PR" || 
+                    n.toUpperCase().trim() === "CONTROLE DE HORAS - TURMAS PR" || 
+                    n.toUpperCase().trim() === "CONTROLE DE HORAS POR TURMA PR" ||
                     (n.toUpperCase().includes("CONTROLE") && n.toUpperCase().includes("HORAS"))
                 );
 
@@ -167,20 +168,35 @@
                     const ws = wb.Sheets[horaSheetName];
                     const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
                     const mapped = [];
-                    // Linha 5 no Excel = índice 4 no array
-                    // Coluna A (Turma) = índice 0
-                    // Coluna I (Total) = índice 8 (CORRIGIDO)
-                    for(let i=4; i < data.length; i++) {
-                        const row = data[i];
-                        if(row) {
-                            const turma = row[0]; // Coluna A
-                            const total = row[8]; // Coluna I (Índice 8)
-                            // Validação simples: tem nome de turma e total é numérico
-                            if(turma && typeof total === 'number' && total > 0) {
-                                mapped.push({ id: i, turma: String(turma).trim(), totalHoras: total });
+
+                    // Verifica se tem dados suficientes (pelo menos até linha 4/índice 3)
+                    if (data.length >= 4) {
+                        const rowTurmas = data[0]; // Linha 1 (índice 0)
+                        const rowHoras = data[3];  // Linha 4 (índice 3)
+
+                        if (rowTurmas && rowHoras) {
+                            // Itera sobre as colunas
+                            for (let col = 0; col < rowTurmas.length; col++) {
+                                const turma = rowTurmas[col];
+                                const total = rowHoras[col];
+                                
+                                // Se existir nome da turma e total for válido
+                                if (turma && (typeof turma === 'string' || typeof turma === 'number')) {
+                                    // Tenta garantir que total é número
+                                    let totalNum = typeof total === 'number' ? total : parseFloat(total);
+                                    
+                                    if (!isNaN(totalNum) && totalNum > 0) {
+                                        mapped.push({ 
+                                            id: `bank_${col}`, // ID único baseado na coluna
+                                            turma: String(turma).trim(), 
+                                            totalHoras: totalNum 
+                                        });
+                                    }
+                                }
                             }
                         }
                     }
+
                     if(mapped.length > 0) {
                         setHourBanks(mapped);
                         counts.banks = mapped.length;
@@ -554,7 +570,7 @@
 
             const renderControle = () => (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {hourBanks.length === 0 && <div className="col-span-full p-8 text-center bg-gray-100 rounded-lg text-gray-500">Nenhum controle de horas carregado. Verifique se a planilha "CONTROLE DE HORAS POR TURMA PR" existe e possui dados na linha 5.</div>}
+                    {hourBanks.length === 0 && <div className="col-span-full p-8 text-center bg-gray-100 rounded-lg text-gray-500">Nenhum controle de horas carregado. Verifique se a planilha "CONTROLE DE HORAS - TURMAS PR" existe e possui dados nas linhas 1 e 4.</div>}
                     {hourBanks.map(bank => {
                         const stats = consumptionByClass[bank.turma] || { used: 0, total: bank.totalHoras };
                         const percentage = bank.totalHoras > 0 ? Math.min((stats.used / bank.totalHoras) * 100, 100) : 0;
