@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Rateio Senac - Final</title>
+    <title>Sistema de Rateio Senac - Final v2</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -44,7 +44,7 @@
         const LINK_FIXO_DO_EXCEL = "https://github.com/Supervisao-pratica/Rateio/raw/refs/heads/main/RATEIO.xlsm"; 
         const LOGO_SENAC = "https://upload.wikimedia.org/wikipedia/commons/8/86/Senac_logo.svg"; 
 
-        // Constantes de Relatório
+        // Constantes de Relatório (Códigos fixos)
         const INFO_DESLOCAMENTO = { uept: 27, tept: 5956, evento: 3 };
         const INFO_ATENDIMENTO = { uept: 27, tept: 5956, evento: 24 };
 
@@ -111,7 +111,7 @@
             const [routeDate, setRouteDate] = useState('');
             const [startPoint, setStartPoint] = useState({ city: '', time: '' });
             const [stops, setStops] = useState([]);
-            const [returnPoint, setReturnPoint] = useState({ city: '', time: '', ccId: '' }); // NOVO: Retorno
+            const [returnPoint, setReturnPoint] = useState({ city: '', time: '', ccId: '' });
 
             const [newAdmin, setNewAdmin] = useState({ data: '', turma: '', atividade: '', inicio: '', fim: '', supervisor: '' });
 
@@ -156,8 +156,8 @@
                     }
                 }
 
-                // 2. Processar Horas (Aba Específica "CONTROLE DE HORAS - TURMAS PR" ou similar)
-                // LÓGICA HORIZONTAL: Linha 1 = Turmas, Linha 4 = Total Horas
+                // 2. Processar Horas (LÓGICA HORIZONTAL)
+                // Busca a aba correta com nome flexível
                 const horaSheetName = wb.SheetNames.find(n => 
                     n.toUpperCase().trim() === "CONTROLE DE HORAS - TURMAS PR" || 
                     n.toUpperCase().trim() === "CONTROLE DE HORAS POR TURMA PR" ||
@@ -166,28 +166,31 @@
 
                 if (horaSheetName) {
                     const ws = wb.Sheets[horaSheetName];
-                    const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+                    const data = XLSX.utils.sheet_to_json(ws, { header: 1 }); // Header: 1 gera array de arrays (linhas)
                     const mapped = [];
 
-                    // Verifica se tem dados suficientes (pelo menos até linha 4/índice 3)
+                    // O usuário informou: 
+                    // Linha 1 = Turmas (índice 0)
+                    // Linha 4 = Carga Horária (índice 3)
+                    
                     if (data.length >= 4) {
-                        const rowTurmas = data[0]; // Linha 1 (índice 0)
-                        const rowHoras = data[3];  // Linha 4 (índice 3)
+                        const rowTurmas = data[0]; // Linha 1
+                        const rowHoras = data[3];  // Linha 4
 
                         if (rowTurmas && rowHoras) {
-                            // Itera sobre as colunas
+                            // Itera pelas colunas
                             for (let col = 0; col < rowTurmas.length; col++) {
                                 const turma = rowTurmas[col];
                                 const total = rowHoras[col];
                                 
-                                // Se existir nome da turma e total for válido
+                                // Verifica se tem nome de turma e valor válido
                                 if (turma && (typeof turma === 'string' || typeof turma === 'number')) {
-                                    // Tenta garantir que total é número
+                                    // SheetJS já resolve fórmulas para o valor calculado.
                                     let totalNum = typeof total === 'number' ? total : parseFloat(total);
                                     
                                     if (!isNaN(totalNum) && totalNum > 0) {
                                         mapped.push({ 
-                                            id: `bank_${col}`, // ID único baseado na coluna
+                                            id: `bank_${col}`, 
                                             turma: String(turma).trim(), 
                                             totalHoras: totalNum 
                                         });
@@ -223,18 +226,15 @@
 
             const saveRoute = () => {
                 if (!routeDate || !startPoint.city || !startPoint.time) return alert("Preencha data e partida.");
-                // Retorno é opcional, mas se preencher cidade, exige horário
                 if (returnPoint.city && !returnPoint.time) return alert("Preencha o horário de chegada do retorno.");
 
                 const newEntries = [];
                 let lastCity = startPoint.city;
                 let lastTime = startPoint.time;
 
-                // Paradas Intermediárias
                 stops.forEach(stop => {
                     if (!stop.city || !stop.arrival || !stop.ccId) return;
                     
-                    // Deslocamento (Ida até a parada)
                     const travelTime = calculateDuration(lastTime, stop.arrival);
                     if (travelTime > 0) {
                         newEntries.push({
@@ -250,7 +250,6 @@
                         });
                     }
                     
-                    // Atendimento
                     if (stop.departure) {
                         const workTime = calculateDuration(stop.arrival, stop.departure);
                         if (workTime > 0) {
@@ -272,7 +271,6 @@
                     lastCity = stop.city;
                 });
 
-                // Retorno Final (Apenas Deslocamento)
                 if (returnPoint.city && returnPoint.time) {
                     const returnTime = calculateDuration(lastTime, returnPoint.time);
                     if (returnTime > 0) {
@@ -284,7 +282,7 @@
                             destino: returnPoint.city,
                             inicio: lastTime,
                             fim: returnPoint.time,
-                            turma: returnPoint.ccId || stops[stops.length-1]?.ccId || '', // Usa CC da última parada se não tiver específico
+                            turma: returnPoint.ccId || stops[stops.length-1]?.ccId || '', 
                             horas: returnTime
                         });
                     }
@@ -391,8 +389,6 @@
                                                         const ccCodigo = cc ? cc.codigo : '-';
                                                         const turmaNome = cc ? cc.turma : 'N/A';
                                                         const rowBg = i % 2 === 0 ? '#ffffff' : '#f8fafc';
-                                                        
-                                                        // Infos SENAC
                                                         const info = v.type === 'deslocamento' ? INFO_DESLOCAMENTO : INFO_ATENDIMENTO;
                                                         
                                                         return (
@@ -406,16 +402,10 @@
                                                                     </div>
                                                                 </td>
                                                                 <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>
-                                                                    {v.type === 'deslocamento' ? 
-                                                                        <span>{v.origem} &#10140; {v.destino}</span> : 
-                                                                        <span>Atend. em {v.local}</span>
-                                                                    }
+                                                                    {v.type === 'deslocamento' ? <span>{v.origem} &#10140; {v.destino}</span> : <span>Atend. em {v.local}</span>}
                                                                 </td>
                                                                 <td style={{padding: '8px', border: '1px solid #e2e8f0', whiteSpace:'nowrap'}}>
-                                                                    {v.type === 'deslocamento' ? 
-                                                                        <div>Saída: {v.inicio}<br/>Chegada: {v.fim}</div> : 
-                                                                        <div>Início: {v.inicio}<br/>Fim: {v.fim}</div>
-                                                                    }
+                                                                    {v.type === 'deslocamento' ? <div>Saída: {v.inicio}<br/>Chegada: {v.fim}</div> : <div>Início: {v.inicio}<br/>Fim: {v.fim}</div>}
                                                                 </td>
                                                                 <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>
                                                                     <div>{turmaNome}</div>
