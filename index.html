@@ -169,12 +169,12 @@
                     const mapped = [];
                     // Linha 5 no Excel = índice 4 no array
                     // Coluna A (Turma) = índice 0
-                    // Coluna J (Total) = índice 9
+                    // Coluna I (Total) = índice 8 (CORRIGIDO)
                     for(let i=4; i < data.length; i++) {
                         const row = data[i];
                         if(row) {
-                            const turma = row[0];
-                            const total = row[9];
+                            const turma = row[0]; // Coluna A
+                            const total = row[8]; // Coluna I (Índice 8)
                             // Validação simples: tem nome de turma e total é numérico
                             if(turma && typeof total === 'number' && total > 0) {
                                 mapped.push({ id: i, turma: String(turma).trim(), totalHoras: total });
