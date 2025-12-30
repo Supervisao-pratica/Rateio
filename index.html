@@ -19,13 +19,46 @@
     <!-- Estilo de Backup (Caso o Tailwind falhe) -->
     <style>
         body { font-family: 'Segoe UI', sans-serif; background-color: #f8fafc; margin: 0; padding: 0; }
-        .loading-alert { padding: 20px; background: #fff3cd; color: #856404; text-align: center; border: 1px solid #ffeeba; }
+        .loading-alert { 
+            padding: 40px; 
+            margin: 50px auto;
+            max-width: 600px;
+            background: #fff3cd; 
+            color: #856404; 
+            text-align: center; 
+            border: 1px solid #ffeeba; 
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .error-alert {
+            background: #f8d7da;
+            color: #721c24;
+            border-color: #f5c6cb;
+        }
     </style>
+
+    <!-- Captura de Erros Global -->
+    <script>
+        window.onerror = function(msg, url, line) {
+            const root = document.getElementById('root');
+            if(root) {
+                root.innerHTML = `
+                    <div class="loading-alert error-alert">
+                        <h3 style="font-weight:bold; font-size:1.2em; margin-bottom:10px;">Ocorreu um erro ao carregar</h3>
+                        <p>${msg}</p>
+                        <p style="font-size:0.8em; margin-top:10px;">Linha: ${line}</p>
+                    </div>
+                `;
+            }
+            return false;
+        };
+    </script>
 </head>
 <body>
     <div id="root">
         <div class="loading-alert">
-            Carregando sistema... Se esta mensagem não sumir em 5 segundos, verifique sua conexão com a internet.
+            <h3 style="font-weight:bold; font-size:1.2em;">Carregando Sistema...</h3>
+            <p>Se esta mensagem não sumir em 5 segundos, verifique sua conexão com a internet.</p>
         </div>
     </div>
 
