@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Rateio Integrado v2</title>
+    <title>Sistema de Rateio Integrado</title>
     
     <!-- 1. Estilos do Tailwind CSS (Layout Visual) -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -16,7 +16,6 @@
     <!-- 3. Biblioteca Excel (Leitura de Arquivos) -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 
-    <!-- Estilo de Backup (Caso o Tailwind falhe) -->
     <style>
         body { font-family: 'Segoe UI', sans-serif; background-color: #f8fafc; margin: 0; padding: 0; }
         .loading-alert { 
@@ -30,26 +29,15 @@
             border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-        .error-alert {
-            background: #f8d7da;
-            color: #721c24;
-            border-color: #f5c6cb;
-        }
+        .error-alert { background: #f8d7da; color: #721c24; border-color: #f5c6cb; }
+        .success-toast { position: fixed; bottom: 20px; right: 20px; background: #15803d; color: white; padding: 12px 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); animation: slideIn 0.5s ease-out; z-index: 1000; }
+        @keyframes slideIn { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     </style>
 
-    <!-- Captura de Erros Global -->
     <script>
         window.onerror = function(msg, url, line) {
             const root = document.getElementById('root');
-            if(root) {
-                root.innerHTML = `
-                    <div class="loading-alert error-alert">
-                        <h3 style="font-weight:bold; font-size:1.2em; margin-bottom:10px;">Ocorreu um erro ao carregar</h3>
-                        <p>${msg}</p>
-                        <p style="font-size:0.8em; margin-top:10px;">Linha: ${line}</p>
-                    </div>
-                `;
-            }
+            if(root) root.innerHTML = `<div class="loading-alert error-alert"><h3>Erro ao carregar</h3><p>${msg}</p><p>Linha: ${line}</p></div>`;
             return false;
         };
     </script>
@@ -58,20 +46,27 @@
     <div id="root">
         <div class="loading-alert">
             <h3 style="font-weight:bold; font-size:1.2em;">Carregando Sistema...</h3>
-            <p>Se esta mensagem não sumir em 5 segundos, verifique sua conexão com a internet.</p>
+            <p>Conectando ao banco de dados...</p>
         </div>
     </div>
 
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
+        // =================================================================================
+        // ÁREA DE CONFIGURAÇÃO - COLE SEU LINK ABAIXO
+        // =================================================================================
+        
+        // Substitua o valor dentro das aspas pelo link RAW do seu arquivo no GitHub
+        // Exemplo: "https://raw.githubusercontent.com/SeuUsuario/SeuRepo/main/Planilha.xlsx"
+        const LINK_FIXO_DO_EXCEL = ""; 
+
+        // =================================================================================
+
         // --- Ícones SVG ---
-        const IconWrapper = ({ children, size = 20, className = "" }) => (
-            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>
-        );
+        const IconWrapper = ({ children, size = 20, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>);
         const Save = (p) => <IconWrapper {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></IconWrapper>;
         const Trash2 = (p) => <IconWrapper {...p}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></IconWrapper>;
-        const Plus = (p) => <IconWrapper {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></IconWrapper>;
         const BarChart3 = (p) => <IconWrapper {...p}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></IconWrapper>;
         const Car = (p) => <IconWrapper {...p}><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M2 12h12"/></IconWrapper>;
         const Users = (p) => <IconWrapper {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></IconWrapper>;
@@ -83,253 +78,159 @@
         const Mail = (p) => <IconWrapper {...p}><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></IconWrapper>;
         const Settings = (p) => <IconWrapper {...p}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></IconWrapper>;
 
-        // --- Componentes ---
-        const Card = ({ children, className = "" }) => (
-            <div className={`bg-white rounded-xl shadow-sm border border-gray-100 p-6 ${className}`}>
-                {children}
-            </div>
-        );
-
-        // --- Funções Auxiliares ---
-        const calculateDuration = (start, end) => {
-            if (!start || !end) return 0;
-            const [startH, startM] = start.split(':').map(Number);
-            const [endH, endM] = end.split(':').map(Number);
-            const startDate = new Date(0, 0, 0, startH, startM);
-            const endDate = new Date(0, 0, 0, endH, endM);
-            let diff = endDate - startDate;
-            if (diff < 0) diff += 24 * 60 * 60 * 1000;
-            return diff / (1000 * 60 * 60);
-        };
-
-        const formatHours = (decimalHours) => {
-            const h = Math.floor(decimalHours);
-            const m = Math.round((decimalHours - h) * 60);
-            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-        };
+        const Card = ({ children, className = "" }) => (<div className={`bg-white rounded-xl shadow-sm border border-gray-100 p-6 ${className}`}>{children}</div>);
+        const calculateDuration = (start, end) => { if (!start || !end) return 0; const [startH, startM] = start.split(':').map(Number); const [endH, endM] = end.split(':').map(Number); let diff = new Date(0, 0, 0, endH, endM) - new Date(0, 0, 0, startH, startM); if (diff < 0) diff += 86400000; return diff / 3600000; };
+        const formatHours = (decimalHours) => { const h = Math.floor(decimalHours); const m = Math.round((decimalHours - h) * 60); return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`; };
 
         function App() {
             const [activeTab, setActiveTab] = useState('controle');
-            const [githubUrl, setGithubUrl] = useState('');
+            const [githubUrl, setGithubUrl] = useState(LINK_FIXO_DO_EXCEL || '');
             const [isLoadingGithub, setIsLoadingGithub] = useState(false);
             const [showConfig, setShowConfig] = useState(false);
+            const [toast, setToast] = useState(null);
 
-            // Dados
             const [costCenters, setCostCenters] = useState([]);
             const [hourBanks, setHourBanks] = useState([]);
             const [visits, setVisits] = useState([]);
             const [adminEntries, setAdminEntries] = useState([]);
 
-            // Forms
-            const [newVisit, setNewVisit] = useState({
-                data: '', turma: '', cidadeOrigem: '', cidadeDestino: '',
-                horarioSaida: '', horarioChegada: '', horarioInicioVisita: '', horarioFimVisita: '', supervisor: ''
-            });
-            const [newAdmin, setNewAdmin] = useState({
-                data: '', turma: '', atividade: '', inicio: '', fim: '', supervisor: ''
-            });
+            const [newVisit, setNewVisit] = useState({ data: '', turma: '', cidadeOrigem: '', cidadeDestino: '', horarioSaida: '', horarioChegada: '', horarioInicioVisita: '', horarioFimVisita: '', supervisor: '' });
+            const [newAdmin, setNewAdmin] = useState({ data: '', turma: '', atividade: '', inicio: '', fim: '', supervisor: '' });
 
-            // Carregar GitHub ao Iniciar
+            // Inicialização Automática
             useEffect(() => {
-                const savedUrl = localStorage.getItem('rateio_github_url');
-                if (savedUrl) {
-                    setGithubUrl(savedUrl);
-                    setTimeout(() => fetchFromGithub(savedUrl), 1000);
-                }
+                const init = async () => {
+                    // Se tiver link fixo, usa ele
+                    if (LINK_FIXO_DO_EXCEL) {
+                        await fetchFromGithub(LINK_FIXO_DO_EXCEL);
+                    } else {
+                        // Senão, tenta recuperar do navegador
+                        const savedUrl = localStorage.getItem('rateio_github_url');
+                        if (savedUrl) {
+                            setGithubUrl(savedUrl);
+                            await fetchFromGithub(savedUrl);
+                        }
+                    }
+                };
+                // Pequeno delay para garantir que biblioteca XLSX carregou
+                setTimeout(init, 1000);
             }, []);
 
-            // Cálculos
+            // Desaparecer Toast
+            useEffect(() => { if (toast) setTimeout(() => setToast(null), 3000); }, [toast]);
+
             const consumptionByClass = useMemo(() => {
                 const summary = {};
-                hourBanks.forEach(bank => {
-                    summary[bank.turma] = { total: bank.totalHoras, used: 0, details: { deslocamento: 0, visita: 0, admin: 0 } };
-                });
-
+                hourBanks.forEach(bank => summary[bank.turma] = { total: bank.totalHoras, used: 0, details: { deslocamento: 0, visita: 0, admin: 0 } });
                 visits.forEach(v => {
-                    if (!summary[v.turma]) return;
-                    const deslocamento = calculateDuration(v.horarioSaida, v.horarioChegada);
-                    const visita = calculateDuration(v.horarioInicioVisita, v.horarioFimVisita);
-                    
-                    if(summary[v.turma]) {
-                        summary[v.turma].used += (deslocamento + visita);
-                        summary[v.turma].details.deslocamento += deslocamento;
-                        summary[v.turma].details.visita += visita;
+                    if (summary[v.turma]) {
+                        const d = calculateDuration(v.horarioSaida, v.horarioChegada);
+                        const vi = calculateDuration(v.horarioInicioVisita, v.horarioFimVisita);
+                        summary[v.turma].used += (d + vi);
+                        summary[v.turma].details.deslocamento += d;
+                        summary[v.turma].details.visita += vi;
                     }
                 });
-
                 adminEntries.forEach(a => {
-                    if (!summary[a.turma]) return;
-                    const adminTime = calculateDuration(a.inicio, a.fim);
-                     if(summary[a.turma]) {
-                        summary[a.turma].used += adminTime;
-                        summary[a.turma].details.admin += adminTime;
-                     }
+                    if (summary[a.turma]) {
+                        const dur = calculateDuration(a.inicio, a.fim);
+                        summary[a.turma].used += dur;
+                        summary[a.turma].details.admin += dur;
+                    }
                 });
                 return summary;
             }, [hourBanks, visits, adminEntries]);
 
-            // Processamento
             const processWorkbook = (wb, source = "upload") => {
-                let ccCount = 0;
-                let bankCount = 0;
-
-                if (wb.SheetNames.some(name => name.toUpperCase().includes("CC"))) {
-                    const sheetName = wb.SheetNames.find(name => name.toUpperCase().includes("CC"));
-                    const data = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
-                    if (data.length > 0) {
-                        const mappedCC = data.map((row, idx) => ({
-                            id: idx,
-                            codigo: row['Centro de Custo'] || row['Codigo'] || 'N/A',
-                            turma: row['Turma'] || row['Nome Turma'] || 'N/A',
-                            descricao: row['Descrição'] || ''
-                        }));
-                        setCostCenters(mappedCC);
-                        ccCount = mappedCC.length;
-                    }
+                let ccCount = 0, bankCount = 0;
+                if (wb.SheetNames.some(n => n.toUpperCase().includes("CC"))) {
+                    const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames.find(n => n.toUpperCase().includes("CC"))]);
+                    if (data.length) { setCostCenters(data.map((r, i) => ({ id: i, codigo: r['Centro de Custo'] || r['Codigo'] || 'N/A', turma: r['Turma'] || r['Nome Turma'] || 'N/A', descricao: r['Descrição'] || '' }))); ccCount = data.length; }
                 }
-
-                if (wb.SheetNames.some(name => name.toUpperCase().includes("HORA"))) {
-                    const sheetName = wb.SheetNames.find(name => name.toUpperCase().includes("HORA"));
-                    const data = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
-                    if (data.length > 0) {
-                        const mappedBanks = data.map((row, idx) => ({
-                            id: idx,
-                            turma: row['Turma'] || row['Nome Turma'] || 'N/A',
-                            totalHoras: Number(row['Total Horas'] || row['Horas'] || 0)
-                        }));
-                        setHourBanks(mappedBanks);
-                        bankCount = mappedBanks.length;
-                    }
+                if (wb.SheetNames.some(n => n.toUpperCase().includes("HORA"))) {
+                    const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames.find(n => n.toUpperCase().includes("HORA"))]);
+                    if (data.length) { setHourBanks(data.map((r, i) => ({ id: i, turma: r['Turma'] || r['Nome Turma'] || 'N/A', totalHoras: Number(r['Total Horas'] || r['Horas'] || 0) }))); bankCount = data.length; }
                 }
-
-                if (source === "github") {
-                    console.log(`GitHub Auto-load: ${ccCount} CCs e ${bankCount} Bancos carregados.`);
-                } else {
-                    alert(`Dados processados!\n- ${ccCount} Centros de Custo\n- ${bankCount} Bancos de Horas`);
-                }
+                if (source === "github") setToast(`Base atualizada: ${ccCount} CCs, ${bankCount} Bancos carregados.`);
+                else alert(`Dados processados!\n- ${ccCount} Centros de Custo\n- ${bankCount} Bancos de Horas`);
             };
 
-            const fetchFromGithub = async (urlToFetch) => {
-                if (!urlToFetch) return;
+            const fetchFromGithub = async (url) => {
+                if (!url) return;
                 setIsLoadingGithub(true);
                 try {
-                    const response = await fetch(urlToFetch);
-                    if (!response.ok) throw new Error("Falha ao baixar arquivo");
-                    const arrayBuffer = await response.arrayBuffer();
-                    const wb = XLSX.read(arrayBuffer, { type: 'array' });
+                    // Verifica se a lib existe, senão tenta de novo em breve
+                    if (typeof XLSX === 'undefined') {
+                        setTimeout(() => fetchFromGithub(url), 500);
+                        return;
+                    }
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error("Erro ao baixar. Verifique o link Raw.");
+                    const ab = await response.arrayBuffer();
+                    const wb = XLSX.read(ab, { type: 'array' });
                     processWorkbook(wb, "github");
-                    localStorage.setItem('rateio_github_url', urlToFetch);
+                    localStorage.setItem('rateio_github_url', url);
                 } catch (error) {
-                    console.error("Erro GitHub:", error);
-                    alert("Erro ao carregar do GitHub. Verifique se o link é o 'Raw'.");
-                } finally {
-                    setIsLoadingGithub(false);
-                }
+                    console.error(error);
+                    if(!LINK_FIXO_DO_EXCEL) alert("Erro ao conectar no GitHub. Verifique o link.");
+                } finally { setIsLoadingGithub(false); }
             };
 
-            const handleConfigUpload = (e) => {
+            const handleFileUpload = (e, type) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
                 reader.onload = (evt) => {
                     const wb = XLSX.read(evt.target.result, { type: 'binary' });
-                    processWorkbook(wb);
+                    if (type === 'config') processWorkbook(wb);
+                    else {
+                        // Lógica de importação de histórico mantida igual
+                        let msg = "";
+                        if (wb.SheetNames.some(n => n.toUpperCase().includes("VISITA"))) {
+                            const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames.find(n => n.toUpperCase().includes("VISITA"))]);
+                            setVisits(prev => [...prev, ...data.map((r, i) => ({ id: Date.now()+i, data: r['Data']||'', turma: r['Turma']||'', cidadeOrigem: r['Origem']||'', cidadeDestino: r['Destino']||'', horarioSaida: r['Saída']||'', horarioChegada: r['Chegada']||'', horarioInicioVisita: r['Início Visita']||'', horarioFimVisita: r['Fim Visita']||'', supervisor: r['Supervisor']||'' }))]);
+                            msg += "Visitas importadas. ";
+                        }
+                        if (wb.SheetNames.some(n => n.toUpperCase().includes("ADMIN"))) {
+                            const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames.find(n => n.toUpperCase().includes("ADMIN"))]);
+                            setAdminEntries(prev => [...prev, ...data.map((r, i) => ({ id: Date.now()+i+1000, data: r['Data']||'', turma: r['Turma']||'', atividade: r['Atividade']||'', inicio: r['Início']||'', fim: r['Fim']||'', supervisor: r['Supervisor']||'' }))]);
+                            msg += "Admin importados.";
+                        }
+                        setToast(msg || "Nenhuma aba identificada.");
+                    }
                 };
                 reader.readAsBinaryString(file);
             };
 
-            const handleDataUpload = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (evt) => {
-                    const wb = XLSX.read(evt.target.result, { type: 'binary' });
-                    let msg = "Lançamentos importados!\n";
-                    if (wb.SheetNames.some(name => name.toUpperCase().includes("VISITA"))) {
-                        const sheet = wb.Sheets[wb.SheetNames.find(n => n.toUpperCase().includes("VISITA"))];
-                        const data = XLSX.utils.sheet_to_json(sheet);
-                        const mapped = data.map((row, idx) => ({
-                            id: Date.now() + idx,
-                            data: row['Data'] || '', turma: row['Turma'] || '',
-                            cidadeOrigem: row['Origem'] || '', cidadeDestino: row['Destino'] || '',
-                            horarioSaida: row['Saída'] || '', horarioChegada: row['Chegada'] || '',
-                            horarioInicioVisita: row['Início Visita'] || '', horarioFimVisita: row['Fim Visita'] || '',
-                            supervisor: row['Supervisor'] || ''
-                        }));
-                        setVisits(prev => [...prev, ...mapped]);
-                        msg += `- ${mapped.length} Visitas\n`;
-                    }
-                    if (wb.SheetNames.some(name => name.toUpperCase().includes("ADMIN"))) {
-                        const sheet = wb.Sheets[wb.SheetNames.find(n => n.toUpperCase().includes("ADMIN"))];
-                        const data = XLSX.utils.sheet_to_json(sheet);
-                        const mapped = data.map((row, idx) => ({
-                            id: Date.now() + idx + 1000,
-                            data: row['Data'] || '', turma: row['Turma'] || '',
-                            atividade: row['Atividade'] || '',
-                            inicio: row['Início'] || '', fim: row['Fim'] || '',
-                            supervisor: row['Supervisor'] || ''
-                        }));
-                        setAdminEntries(prev => [...prev, ...mapped]);
-                        msg += `- ${mapped.length} Admin\n`;
-                    }
-                    alert(msg);
-                };
-                reader.readAsBinaryString(file);
-            };
-
-            const addVisit = () => {
-                if (!newVisit.turma || !newVisit.data) return alert("Preencha os dados obrigatórios");
-                setVisits([...visits, { ...newVisit, id: Date.now() }]);
-                setNewVisit({ ...newVisit, horarioSaida: '', horarioChegada: '', horarioInicioVisita: '', horarioFimVisita: '' });
-            };
-
-            const addAdmin = () => {
-                if (!newAdmin.turma || !newAdmin.data) return alert("Preencha os dados obrigatórios");
-                setAdminEntries([...adminEntries, { ...newAdmin, id: Date.now() }]);
-                setNewAdmin({ ...newAdmin, inicio: '', fim: '' });
-            };
-
-            const exportToExcel = () => {
+            // Funções de CRUD e Exportação
+            const addVisit = () => { if (!newVisit.turma || !newVisit.data) return alert("Preencha dados"); setVisits([...visits, { ...newVisit, id: Date.now() }]); setNewVisit({ ...newVisit, horarioSaida: '', horarioChegada: '', horarioInicioVisita: '', horarioFimVisita: '' }); setToast("Visita lançada!"); };
+            const addAdmin = () => { if (!newAdmin.turma || !newAdmin.data) return alert("Preencha dados"); setAdminEntries([...adminEntries, { ...newAdmin, id: Date.now() }]); setNewAdmin({ ...newAdmin, inicio: '', fim: '' }); setToast("Admin lançado!"); };
+            const exportData = () => {
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(costCenters), "CC");
                 XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hourBanks), "CONTROLE DE HORAS");
                 XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(visits), "RATEIO - VISITAS");
                 XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(adminEntries), "RATEIO - ADMINISTRATIVO");
-                XLSX.writeFile(wb, "Backup_Sistema_Rateio.xlsx");
+                XLSX.writeFile(wb, "Sistema_Rateio_Backup.xlsx");
             };
-
-            const handleSendEmail = (turma) => {
-                const stats = consumptionByClass[turma] || { total: 0, used: 0 };
-                const saldo = stats.total - stats.used;
-                const turmaVisits = visits.filter(v => v.turma === turma);
-                const turmaAdmin = adminEntries.filter(a => a.turma === turma);
-
-                const subject = encodeURIComponent(`Relatório de Rateio - ${turma}`);
-                let bodyText = `Olá,\n\nResumo para a turma: ${turma}\n\n`;
-                bodyText += `Contratado: ${formatHours(stats.total)}h\nConsumido: ${formatHours(stats.used)}h\nSaldo: ${formatHours(saldo)}h\n\n`;
-                bodyText += `VISITAS:\n`;
-                if (turmaVisits.length === 0) bodyText += "Nenhuma.\n";
-                turmaVisits.forEach(v => {
-                    const dur = calculateDuration(v.horarioSaida, v.horarioChegada) + calculateDuration(v.horarioInicioVisita, v.horarioFimVisita);
-                    bodyText += `- ${v.data}: ${v.cidadeOrigem}->${v.cidadeDestino} (${formatHours(dur)}h) Sup:${v.supervisor}\n`;
-                });
-                bodyText += `\nADMIN:\n`;
-                if (turmaAdmin.length === 0) bodyText += "Nenhum.\n";
-                turmaAdmin.forEach(a => {
-                    const dur = calculateDuration(a.inicio, a.fim);
-                    bodyText += `- ${a.data}: ${a.atividade} (${formatHours(dur)}h) Sup:${a.supervisor}\n`;
-                });
-                window.location.href = `mailto:?subject=${subject}&body=${encodeURIComponent(bodyText)}`;
+            const sendEmail = (turma) => {
+                const s = consumptionByClass[turma] || { total: 0, used: 0 };
+                const saldo = s.total - s.used;
+                let body = `Resumo ${turma}\n\nContratado: ${formatHours(s.total)}h\nUsado: ${formatHours(s.used)}h\nSaldo: ${formatHours(saldo)}h\n\n`;
+                visits.filter(v => v.turma === turma).forEach(v => body += `- ${v.data}: ${v.cidadeOrigem}->${v.cidadeDestino} (${formatHours(calculateDuration(v.horarioSaida, v.horarioChegada)+calculateDuration(v.horarioInicioVisita, v.horarioFimVisita))}h)\n`);
+                adminEntries.filter(a => a.turma === turma).forEach(a => body += `- ${a.data}: ${a.atividade} (${formatHours(calculateDuration(a.inicio, a.fim))}h)\n`);
+                window.location.href = `mailto:?subject=Rateio ${turma}&body=${encodeURIComponent(body)}`;
             };
 
             return (
                 <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans text-gray-800">
+                    {toast && <div className="success-toast">{toast}</div>}
                     <div className="max-w-6xl mx-auto mb-6">
                         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
                             <div><h1 className="text-2xl font-bold text-gray-900">Sistema de Rateio</h1><p className="text-gray-500 text-sm">Controle de Horas</p></div>
                             <div className="flex gap-2">
-                                <button onClick={() => setShowConfig(!showConfig)} className="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 flex items-center gap-2"><Settings size={18} /> {showConfig ? 'Fechar' : 'Base'}</button>
-                                <button onClick={exportToExcel} className="bg-green-700 text-white px-4 py-2 rounded-lg shadow hover:bg-green-800 flex items-center gap-2"><Download size={18} /> Salvar</button>
+                                <button onClick={() => setShowConfig(!showConfig)} className="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 flex items-center gap-2"><Settings size={18} /> {showConfig ? 'Fechar' : 'Config'}</button>
+                                <button onClick={exportData} className="bg-green-700 text-white px-4 py-2 rounded-lg shadow hover:bg-green-800 flex items-center gap-2"><Download size={18} /> Backup</button>
                             </div>
                         </div>
 
@@ -337,17 +238,18 @@
                             <Card className="mb-6 bg-slate-50 border-slate-200">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                     <div>
-                                        <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><Github size={18}/> GitHub Raw URL</h4>
+                                        <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><Github size={18}/> Conexão Automática</h4>
                                         <div className="flex gap-2">
-                                            <input type="text" placeholder="Cole o link Raw do Excel aqui..." className="flex-1 p-2 border rounded text-sm" value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} />
-                                            <button onClick={() => fetchFromGithub(githubUrl)} className="bg-black text-white px-3 py-2 rounded hover:bg-gray-800 text-sm" disabled={isLoadingGithub}>{isLoadingGithub ? '...' : 'OK'}</button>
+                                            <input type="text" placeholder="Cole o link Raw aqui..." className="flex-1 p-2 border rounded text-sm" value={githubUrl} onChange={(e) => setGithubUrl(e.target.value)} />
+                                            <button onClick={() => fetchFromGithub(githubUrl)} className="bg-black text-white px-3 py-2 rounded hover:bg-gray-800 text-sm" disabled={isLoadingGithub}>{isLoadingGithub ? '...' : 'Testar e Salvar'}</button>
                                         </div>
+                                        <p className="text-xs text-gray-500 mt-2">Dica: Edite o arquivo HTML e cole o link na variável <b>LINK_FIXO_DO_EXCEL</b> para não precisar colar aqui toda vez.</p>
                                     </div>
                                     <div className="border-l pl-6 border-gray-200">
                                         <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><FileSpreadsheet size={18}/> Upload Manual</h4>
                                         <div className="grid grid-cols-2 gap-2">
-                                            <div className="relative"><input type="file" accept=".xlsx" onChange={handleConfigUpload} className="absolute inset-0 w-full opacity-0 cursor-pointer" /><button className="w-full bg-blue-100 text-blue-700 py-2 rounded text-xs font-bold hover:bg-blue-200">Base (CC)</button></div>
-                                            <div className="relative"><input type="file" accept=".xlsx" onChange={handleDataUpload} className="absolute inset-0 w-full opacity-0 cursor-pointer" /><button className="w-full bg-green-100 text-green-700 py-2 rounded text-xs font-bold hover:bg-green-200">Histórico</button></div>
+                                            <div className="relative"><input type="file" accept=".xlsx" onChange={(e) => handleFileUpload(e, 'config')} className="absolute inset-0 w-full opacity-0 cursor-pointer" /><button className="w-full bg-blue-100 text-blue-700 py-2 rounded text-xs font-bold hover:bg-blue-200">Base (CC)</button></div>
+                                            <div className="relative"><input type="file" accept=".xlsx" onChange={(e) => handleFileUpload(e, 'data')} className="absolute inset-0 w-full opacity-0 cursor-pointer" /><button className="w-full bg-green-100 text-green-700 py-2 rounded text-xs font-bold hover:bg-green-200">Histórico</button></div>
                                         </div>
                                     </div>
                                 </div>
@@ -366,7 +268,7 @@
                     <div className="max-w-6xl mx-auto">
                         {activeTab === 'controle' && (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {hourBanks.length === 0 && <div className="p-4 bg-yellow-50 text-yellow-800 rounded">Base de dados vazia. Configure acima.</div>}
+                                {(hourBanks.length === 0 && !isLoadingGithub) && <div className="p-4 bg-yellow-50 text-yellow-800 rounded col-span-full border border-yellow-200">⚠️ Nenhuma base de dados carregada. Configure o link do GitHub acima.</div>}
                                 {hourBanks.map(bank => {
                                     const stats = consumptionByClass[bank.turma] || { used: 0, total: bank.totalHoras };
                                     const percentage = bank.totalHoras > 0 ? Math.min((stats.used / bank.totalHoras) * 100, 100) : 0;
@@ -375,7 +277,7 @@
                                         <Card key={bank.id} className="border-l-4 border-l-blue-500">
                                             <div className="flex justify-between items-start mb-2">
                                                 <div><h3 className="font-bold text-lg">{bank.turma}</h3><p className="text-sm text-gray-500">{formatHours(bank.totalHoras)}h</p></div>
-                                                <button onClick={() => handleSendEmail(bank.turma)} className="p-2 rounded-full bg-gray-100 hover:bg-blue-100"><Mail size={18} /></button>
+                                                <button onClick={() => sendEmail(bank.turma)} className="p-2 rounded-full bg-gray-100 hover:bg-blue-100" title="Enviar Relatório"><Mail size={18} /></button>
                                             </div>
                                             <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2"><div className={`h-2.5 rounded-full ${saldo < 0 ? 'bg-red-500' : 'bg-blue-600'}`} style={{ width: `${percentage}%` }}></div></div>
                                             <div className="flex justify-between text-sm mt-1"><span>Usado: {formatHours(stats.used)}h</span><span className={saldo < 0 ? 'text-red-500 font-bold' : 'text-green-600 font-bold'}>Saldo: {formatHours(saldo)}h</span></div>
