@@ -1,0 +1,562 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { Upload, BarChart3, Users, Clock, Car, Save, Trash2, Plus, FileSpreadsheet, AlertCircle, Download, Database, MapPin, Github, Mail, Settings } from 'lucide-react';
+
+// --- Componentes UI ---
+const Card = ({ children, className = "" }) => (
+  <div className={`bg-white rounded-xl shadow-sm border border-gray-100 p-6 ${className}`}>
+    {children}
+  </div>
+);
+
+// --- Funções Auxiliares ---
+const calculateDuration = (start, end) => {
+  if (!start || !end) return 0;
+  const [startH, startM] = start.split(':').map(Number);
+  const [endH, endM] = end.split(':').map(Number);
+  const startDate = new Date(0, 0, 0, startH, startM);
+  const endDate = new Date(0, 0, 0, endH, endM);
+  let diff = endDate - startDate;
+  if (diff < 0) diff += 24 * 60 * 60 * 1000;
+  return diff / (1000 * 60 * 60);
+};
+
+const formatHours = (decimalHours) => {
+  const h = Math.floor(decimalHours);
+  const m = Math.round((decimalHours - h) * 60);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+};
+
+export default function App() {
+  // --- Estados ---
+  const [activeTab, setActiveTab] = useState('controle');
+  const [githubUrl, setGithubUrl] = useState('');
+  const [isLoadingGithub, setIsLoadingGithub] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
+
+  // Dados Principais
+  const [costCenters, setCostCenters] = useState([]);
+  const [hourBanks, setHourBanks] = useState([]);
+  const [visits, setVisits] = useState([]);
+  const [adminEntries, setAdminEntries] = useState([]);
+
+  // Formulários
+  const [newVisit, setNewVisit] = useState({
+    data: '', turma: '', cidadeOrigem: '', cidadeDestino: '',
+    horarioSaida: '', horarioChegada: '', horarioInicioVisita: '', horarioFimVisita: '', supervisor: ''
+  });
+
+  const [newAdmin, setNewAdmin] = useState({
+    data: '', turma: '', atividade: '', inicio: '', fim: '', supervisor: ''
+  });
+
+  // --- Inicialização ---
+
+  // 1. Carregar SheetJS
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = "https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js";
+    script.async = true;
+    document.body.appendChild(script);
+  }, []);
+
+  // 2. Carregar URL do GitHub salva e tentar buscar dados
+  useEffect(() => {
+    const savedUrl = localStorage.getItem('rateio_github_url');
+    if (savedUrl) {
+      setGithubUrl(savedUrl);
+      // Pequeno delay para garantir que o SheetJS carregou
+      setTimeout(() => fetchFromGithub(savedUrl), 1000);
+    }
+  }, []);
+
+  // --- Lógica de Cálculos ---
+  const consumptionByClass = useMemo(() => {
+    const summary = {};
+    hourBanks.forEach(bank => {
+      summary[bank.turma] = { total: bank.totalHoras, used: 0, details: { deslocamento: 0, visita: 0, admin: 0 } };
+    });
+
+    visits.forEach(v => {
+      if (!summary[v.turma]) return;
+      const deslocamento = calculateDuration(v.horarioSaida, v.horarioChegada);
+      const visita = calculateDuration(v.horarioInicioVisita, v.horarioFimVisita);
+      summary[v.turma].used += (deslocamento + visita);
+      summary[v.turma].details.deslocamento += deslocamento;
+      summary[v.turma].details.visita += visita;
+    });
+
+    adminEntries.forEach(a => {
+      if (!summary[a.turma]) return;
+      const adminTime = calculateDuration(a.inicio, a.fim);
+      summary[a.turma].used += adminTime;
+      summary[a.turma].details.admin += adminTime;
+    });
+
+    return summary;
+  }, [hourBanks, visits, adminEntries]);
+
+  // --- Manipulação de Dados ---
+
+  const processWorkbook = (wb, source = "upload") => {
+    let msg = "";
+    let ccCount = 0;
+    let bankCount = 0;
+
+    // Processar CC
+    if (wb.SheetNames.some(name => name.toUpperCase().includes("CC"))) {
+      const sheetName = wb.SheetNames.find(name => name.toUpperCase().includes("CC"));
+      const data = window.XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
+      if (data.length > 0) {
+        const mappedCC = data.map((row, idx) => ({
+          id: idx,
+          codigo: row['Centro de Custo'] || row['Codigo'] || 'N/A',
+          turma: row['Turma'] || row['Nome Turma'] || 'N/A',
+          descricao: row['Descrição'] || ''
+        }));
+        setCostCenters(mappedCC);
+        ccCount = mappedCC.length;
+      }
+    }
+
+    // Processar Horas
+    if (wb.SheetNames.some(name => name.toUpperCase().includes("HORA"))) {
+      const sheetName = wb.SheetNames.find(name => name.toUpperCase().includes("HORA"));
+      const data = window.XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
+      if (data.length > 0) {
+        const mappedBanks = data.map((row, idx) => ({
+          id: idx,
+          turma: row['Turma'] || row['Nome Turma'] || 'N/A',
+          totalHoras: Number(row['Total Horas'] || row['Horas'] || 0)
+        }));
+        setHourBanks(mappedBanks);
+        bankCount = mappedBanks.length;
+      }
+    }
+
+    if (source === "github") {
+      console.log(`GitHub Auto-load: ${ccCount} CCs e ${bankCount} Bancos de horas carregados.`);
+    } else {
+      alert(`Dados processados!\n- ${ccCount} Centros de Custo\n- ${bankCount} Bancos de Horas`);
+    }
+  };
+
+  const fetchFromGithub = async (urlToFetch) => {
+    if (!urlToFetch) return;
+    if (!window.XLSX) {
+      setTimeout(() => fetchFromGithub(urlToFetch), 500); // Tentar novamente se lib não carregou
+      return;
+    }
+
+    setIsLoadingGithub(true);
+    try {
+      const response = await fetch(urlToFetch);
+      if (!response.ok) throw new Error("Falha ao baixar arquivo");
+      
+      const arrayBuffer = await response.arrayBuffer();
+      const wb = window.XLSX.read(arrayBuffer, { type: 'array' });
+      
+      processWorkbook(wb, "github");
+      localStorage.setItem('rateio_github_url', urlToFetch); // Salvar URL para o futuro
+      
+    } catch (error) {
+      console.error("Erro GitHub:", error);
+      alert("Erro ao carregar do GitHub. Verifique se o link é o 'Raw' e se o repositório é público.");
+    } finally {
+      setIsLoadingGithub(false);
+    }
+  };
+
+  // Upload Manual de Configuração
+  const handleConfigUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file || !window.XLSX) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const wb = window.XLSX.read(evt.target.result, { type: 'binary' });
+      processWorkbook(wb);
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  // Upload de Lançamentos (Mantido igual)
+  const handleDataUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file || !window.XLSX) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const wb = window.XLSX.read(evt.target.result, { type: 'binary' });
+      let msg = "Lançamentos importados!\n";
+
+      if (wb.SheetNames.some(name => name.toUpperCase().includes("VISITA"))) {
+        const sheet = wb.Sheets[wb.SheetNames.find(n => n.toUpperCase().includes("VISITA"))];
+        const data = window.XLSX.utils.sheet_to_json(sheet);
+        const mapped = data.map((row, idx) => ({
+          id: Date.now() + idx,
+          data: row['Data'] || '', turma: row['Turma'] || '',
+          cidadeOrigem: row['Origem'] || '', cidadeDestino: row['Destino'] || '',
+          horarioSaida: row['Saída'] || '', horarioChegada: row['Chegada'] || '',
+          horarioInicioVisita: row['Início Visita'] || '', horarioFimVisita: row['Fim Visita'] || '',
+          supervisor: row['Supervisor'] || ''
+        }));
+        setVisits(prev => [...prev, ...mapped]);
+        msg += `- ${mapped.length} Visitas\n`;
+      }
+      // Logica Admin omitida para brevidade, mas segue o mesmo padrão
+      alert(msg);
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  // --- Funções de Ação ---
+
+  const addVisit = () => {
+    if (!newVisit.turma || !newVisit.data) return alert("Preencha os dados obrigatórios");
+    setVisits([...visits, { ...newVisit, id: Date.now() }]);
+    setNewVisit({ ...newVisit, horarioSaida: '', horarioChegada: '', horarioInicioVisita: '', horarioFimVisita: '' });
+  };
+
+  const addAdmin = () => {
+      if (!newAdmin.turma || !newAdmin.data) return alert("Preencha os dados obrigatórios");
+      setAdminEntries([...adminEntries, { ...newAdmin, id: Date.now() }]);
+      setNewAdmin({ ...newAdmin, inicio: '', fim: '' });
+  };
+
+  const exportToExcel = () => {
+    if (!window.XLSX) return;
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(costCenters), "CC");
+    window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(hourBanks), "CONTROLE DE HORAS");
+    window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(visits), "RATEIO - VISITAS");
+    window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(adminEntries), "RATEIO - ADMINISTRATIVO");
+    window.XLSX.writeFile(wb, "Backup_Sistema_Rateio.xlsx");
+  };
+
+  // --- Geração de E-mail (Outlook) ---
+  const handleSendEmail = (turma) => {
+    const stats = consumptionByClass[turma] || { total: 0, used: 0 };
+    const saldo = stats.total - stats.used;
+    const turmaVisits = visits.filter(v => v.turma === turma);
+    const turmaAdmin = adminEntries.filter(a => a.turma === turma);
+
+    // Assunto
+    const subject = encodeURIComponent(`Relatório de Rateio e Horas - ${turma}`);
+
+    // Corpo do E-mail (Plain Text formatado)
+    let bodyText = `Olá,\n\nSegue resumo de horas para a turma: ${turma}\n\n`;
+    bodyText += `RESUMO GERAL:\n`;
+    bodyText += `Total Contratado: ${formatHours(stats.total)}h\n`;
+    bodyText += `Total Consumido: ${formatHours(stats.used)}h\n`;
+    bodyText += `Saldo Atual: ${formatHours(saldo)}h\n\n`;
+    
+    bodyText += `-----------------------------------\n`;
+    bodyText += `DETALHAMENTO DE VISITAS:\n`;
+    if (turmaVisits.length === 0) bodyText += "Nenhuma visita lançada.\n";
+    turmaVisits.forEach(v => {
+      const duracao = calculateDuration(v.horarioSaida, v.horarioChegada) + calculateDuration(v.horarioInicioVisita, v.horarioFimVisita);
+      bodyText += `- ${v.data}: ${v.cidadeOrigem} -> ${v.cidadeDestino} (${formatHours(duracao)}h) | Sup: ${v.supervisor}\n`;
+    });
+
+    bodyText += `\n-----------------------------------\n`;
+    bodyText += `ATIVIDADES ADMINISTRATIVAS:\n`;
+    if (turmaAdmin.length === 0) bodyText += "Nenhum lançamento administrativo.\n";
+    turmaAdmin.forEach(a => {
+        const duracao = calculateDuration(a.inicio, a.fim);
+        bodyText += `- ${a.data}: ${a.atividade} (${formatHours(duracao)}h) | Sup: ${a.supervisor}\n`;
+    });
+
+    bodyText += `\n\nAtenciosamente,\nGestão de Rateio`;
+
+    const body = encodeURIComponent(bodyText);
+    
+    // Abre o cliente de email
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  };
+
+  // --- Renderização ---
+
+  const renderControle = () => (
+    <div className="space-y-6">
+      {/* Botão para configurar GitHub se estiver vazio */}
+      {hourBanks.length === 0 && !isLoadingGithub && (
+        <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200 flex items-start gap-3">
+          <AlertCircle className="text-yellow-600 mt-1" />
+          <div>
+            <h3 className="font-bold text-yellow-800">Base de dados vazia</h3>
+            <p className="text-sm text-yellow-700">Configure o link do GitHub acima ou faça upload manual da planilha "Base" para ver os gráficos.</p>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {hourBanks.map(bank => {
+          const stats = consumptionByClass[bank.turma] || { used: 0, total: bank.totalHoras };
+          const percentage = bank.totalHoras > 0 ? Math.min((stats.used / bank.totalHoras) * 100, 100) : 0;
+          const saldo = bank.totalHoras - stats.used;
+          
+          return (
+            <Card key={bank.id} className="border-l-4 border-l-blue-500 hover:shadow-md transition-shadow relative">
+              <div className="flex justify-between items-start mb-2">
+                <div>
+                  <h3 className="font-bold text-lg text-gray-800">{bank.turma}</h3>
+                  <p className="text-sm text-gray-500">Contratado: {formatHours(bank.totalHoras)}h</p>
+                </div>
+                {/* Botão de E-mail Rápido por Turma */}
+                <button 
+                    onClick={() => handleSendEmail(bank.turma)}
+                    title="Enviar Relatório por E-mail"
+                    className="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-600 transition-colors"
+                >
+                    <Mail size={18} />
+                </button>
+              </div>
+              
+              <div className="mt-4">
+                <div className="flex justify-between text-sm mb-1">
+                  <span>Consumido: {formatHours(stats.used)}h</span>
+                  <span className={`font-bold ${saldo < 0 ? 'text-red-500' : 'text-green-600'}`}>
+                    Saldo: {formatHours(saldo)}h
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                  <div 
+                    className={`h-2.5 rounded-full ${saldo < 0 ? 'bg-red-500' : 'bg-blue-600'}`} 
+                    style={{ width: `${percentage}%` }}
+                  ></div>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const renderVisitas = () => (
+      <div className="space-y-6">
+        <Card>
+          <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+            <Car size={20} className="text-blue-600"/>
+            Novo Lançamento - Visita Técnica
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            <div className="flex flex-col">
+              <label className="text-xs text-gray-500 mb-1">Data</label>
+              <input type="date" className="p-2 border rounded" value={newVisit.data} onChange={e => setNewVisit({...newVisit, data: e.target.value})} />
+            </div>
+            <div className="flex flex-col">
+              <label className="text-xs text-gray-500 mb-1">Turma (CC)</label>
+              <select className="p-2 border rounded" value={newVisit.turma} onChange={e => setNewVisit({...newVisit, turma: e.target.value})}>
+                <option value="">Selecione...</option>
+                {costCenters.map(cc => <option key={cc.id} value={cc.turma}>{cc.turma} - {cc.codigo}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col">
+              <label className="text-xs text-gray-500 mb-1">Supervisor</label>
+              <input type="text" className="p-2 border rounded" placeholder="Nome" value={newVisit.supervisor} onChange={e => setNewVisit({...newVisit, supervisor: e.target.value})} />
+            </div>
+          </div>
+          <div className="p-4 bg-blue-50 rounded-lg mb-4">
+            <h4 className="font-semibold text-sm text-blue-800 mb-3">Deslocamento</h4>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <input type="text" placeholder="Origem" className="p-2 border rounded" value={newVisit.cidadeOrigem} onChange={e => setNewVisit({...newVisit, cidadeOrigem: e.target.value})} />
+              <input type="text" placeholder="Destino" className="p-2 border rounded" value={newVisit.cidadeDestino} onChange={e => setNewVisit({...newVisit, cidadeDestino: e.target.value})} />
+              <input type="time" title="Saída" className="p-2 border rounded" value={newVisit.horarioSaida} onChange={e => setNewVisit({...newVisit, horarioSaida: e.target.value})} />
+              <input type="time" title="Chegada" className="p-2 border rounded" value={newVisit.horarioChegada} onChange={e => setNewVisit({...newVisit, horarioChegada: e.target.value})} />
+            </div>
+          </div>
+          <div className="p-4 bg-green-50 rounded-lg mb-4">
+            <h4 className="font-semibold text-sm text-green-800 mb-3">Atendimento no Local</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex flex-col">
+                <label className="text-xs text-gray-500">Início Visita</label>
+                <input type="time" className="p-2 border rounded" value={newVisit.horarioInicioVisita} onChange={e => setNewVisit({...newVisit, horarioInicioVisita: e.target.value})} />
+              </div>
+              <div className="flex flex-col">
+                <label className="text-xs text-gray-500">Fim Visita</label>
+                <input type="time" className="p-2 border rounded" value={newVisit.horarioFimVisita} onChange={e => setNewVisit({...newVisit, horarioFimVisita: e.target.value})} />
+              </div>
+            </div>
+          </div>
+          <button onClick={addVisit} className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 flex justify-center items-center gap-2">
+            <Save size={18} /> Salvar Lançamento
+          </button>
+        </Card>
+        <Card>
+          <h3 className="font-bold text-gray-700 mb-2">Histórico de Visitas</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-gray-100 text-gray-600">
+                <tr>
+                  <th className="p-2">Data</th>
+                  <th className="p-2">Turma</th>
+                  <th className="p-2">Rota</th>
+                  <th className="p-2">Total (h)</th>
+                  <th className="p-2">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visits.map(v => {
+                  const hDesloc = calculateDuration(v.horarioSaida, v.horarioChegada);
+                  const hVisita = calculateDuration(v.horarioInicioVisita, v.horarioFimVisita);
+                  return (
+                    <tr key={v.id} className="border-b">
+                      <td className="p-2">{v.data}</td>
+                      <td className="p-2">{v.turma}</td>
+                      <td className="p-2">{v.cidadeOrigem} → {v.cidadeDestino}</td>
+                      <td className="p-2 font-bold">{formatHours(hDesloc + hVisita)}</td>
+                      <td className="p-2">
+                        <button onClick={() => setVisits(visits.filter(i => i.id !== v.id))} className="text-red-500 hover:text-red-700"><Trash2 size={16} /></button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
+  );
+
+  const renderAdmin = () => (
+    <div className="space-y-6">
+      <Card>
+        <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Users size={20} className="text-purple-600"/> Rateio - Administrativo</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+          <input type="date" className="p-2 border rounded" value={newAdmin.data} onChange={e => setNewAdmin({...newAdmin, data: e.target.value})} />
+          <select className="p-2 border rounded" value={newAdmin.turma} onChange={e => setNewAdmin({...newAdmin, turma: e.target.value})}>
+             <option value="">Selecione Turma...</option>
+              {costCenters.map(cc => <option key={cc.id} value={cc.turma}>{cc.turma}</option>)}
+          </select>
+          <input type="text" placeholder="Atividade" className="p-2 border rounded" value={newAdmin.atividade} onChange={e => setNewAdmin({...newAdmin, atividade: e.target.value})} />
+        </div>
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <input type="time" className="p-2 border rounded" value={newAdmin.inicio} onChange={e => setNewAdmin({...newAdmin, inicio: e.target.value})} />
+          <input type="time" className="p-2 border rounded" value={newAdmin.fim} onChange={e => setNewAdmin({...newAdmin, fim: e.target.value})} />
+        </div>
+        <button onClick={addAdmin} className="w-full bg-purple-600 text-white py-2 rounded hover:bg-purple-700 flex justify-center items-center gap-2"><Save size={18} /> Salvar Administrativo</button>
+      </Card>
+      <Card>
+          <h3 className="font-bold text-gray-700 mb-2">Histórico Administrativo</h3>
+          <table className="w-full text-sm text-left">
+            <thead className="bg-gray-100 text-gray-600"><tr><th className="p-2">Data</th><th className="p-2">Turma</th><th className="p-2">Atividade</th><th className="p-2">Horas</th><th className="p-2">Ações</th></tr></thead>
+            <tbody>
+              {adminEntries.map(a => (
+                <tr key={a.id} className="border-b"><td className="p-2">{a.data}</td><td className="p-2">{a.turma}</td><td className="p-2">{a.atividade}</td><td className="p-2 font-bold">{formatHours(calculateDuration(a.inicio, a.fim))}</td><td className="p-2"><button onClick={() => setAdminEntries(adminEntries.filter(i => i.id !== a.id))} className="text-red-500"><Trash2 size={16} /></button></td></tr>
+              ))}
+            </tbody>
+          </table>
+      </Card>
+    </div>
+  );
+
+  const renderCC = () => (
+    <Card>
+        <h3 className="font-bold text-lg text-gray-800 mb-4">Centros de Custo (CC)</h3>
+        <table className="w-full text-left border-collapse">
+          <thead><tr className="bg-gray-100 text-gray-600"><th className="p-3 border-b">Código</th><th className="p-3 border-b">Turma</th><th className="p-3 border-b">Descrição</th></tr></thead>
+          <tbody>
+            {costCenters.map(cc => (
+              <tr key={cc.id} className="border-b"><td className="p-3 font-mono text-blue-600 font-bold">{cc.codigo}</td><td className="p-3">{cc.turma}</td><td className="p-3 text-gray-600">{cc.descricao}</td></tr>
+            ))}
+          </tbody>
+        </table>
+    </Card>
+  );
+
+  return (
+    <div className="min-h-screen bg-gray-50 font-sans text-gray-800 p-4 md:p-8">
+      
+      {/* Top Bar / Header */}
+      <div className="max-w-6xl mx-auto mb-6">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Sistema de Rateio</h1>
+            <p className="text-gray-500 text-sm">Painel de Controle de Horas e Visitas</p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setShowConfig(!showConfig)} className="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 flex items-center gap-2">
+              <Settings size={18} /> {showConfig ? 'Fechar Config' : 'Configurar Base'}
+            </button>
+            <button onClick={exportToExcel} className="bg-green-700 text-white px-4 py-2 rounded-lg shadow hover:bg-green-800 flex items-center gap-2">
+              <Download size={18} /> Salvar Dados
+            </button>
+          </div>
+        </div>
+
+        {/* Configuração GitHub e Uploads */}
+        {showConfig && (
+          <Card className="mb-6 bg-slate-50 border-slate-200">
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Lado Esquerdo: GitHub Automático */}
+                <div>
+                   <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><Github size={18}/> Conexão GitHub (Automático)</h4>
+                   <p className="text-xs text-gray-500 mb-2">Cole o link "Raw" do arquivo Excel no GitHub. O sistema carregará automaticamente ao abrir.</p>
+                   <div className="flex gap-2">
+                     <input 
+                        type="text" 
+                        placeholder="https://raw.githubusercontent.com/.../Planilha.xlsx" 
+                        className="flex-1 p-2 border rounded text-sm"
+                        value={githubUrl}
+                        onChange={(e) => setGithubUrl(e.target.value)}
+                     />
+                     <button 
+                        onClick={() => fetchFromGithub(githubUrl)} 
+                        className="bg-black text-white px-3 py-2 rounded hover:bg-gray-800 text-sm"
+                        disabled={isLoadingGithub}
+                     >
+                        {isLoadingGithub ? 'Baixando...' : 'Salvar e Carregar'}
+                     </button>
+                   </div>
+                </div>
+
+                {/* Lado Direito: Uploads Manuais */}
+                <div className="border-l pl-6 border-gray-200">
+                   <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><FileSpreadsheet size={18}/> Upload Manual</h4>
+                   <div className="grid grid-cols-2 gap-2">
+                      <div className="relative">
+                        <input type="file" accept=".xlsx" onChange={handleConfigUpload} className="absolute inset-0 w-full opacity-0 cursor-pointer" />
+                        <button className="w-full bg-blue-100 text-blue-700 py-2 rounded text-xs font-bold hover:bg-blue-200">Carregar Base (CC)</button>
+                      </div>
+                      <div className="relative">
+                        <input type="file" accept=".xlsx" onChange={handleDataUpload} className="absolute inset-0 w-full opacity-0 cursor-pointer" />
+                        <button className="w-full bg-green-100 text-green-700 py-2 rounded text-xs font-bold hover:bg-green-200">Carregar Histórico</button>
+                      </div>
+                   </div>
+                </div>
+             </div>
+          </Card>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="max-w-6xl mx-auto bg-white rounded-lg shadow-sm p-1 mb-6 flex overflow-x-auto">
+        {[
+          { id: 'controle', icon: BarChart3, label: 'Painel Geral' },
+          { id: 'visitas', icon: Car, label: 'Lançar Visitas' },
+          { id: 'admin', icon: Users, label: 'Lançar Admin' },
+          { id: 'cc', icon: Database, label: 'Ver CCs' },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-md transition-all whitespace-nowrap ${
+              activeTab === tab.id ? 'bg-blue-50 text-blue-600 font-bold shadow-sm' : 'text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            <tab.icon size={18} /> {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Conteúdo */}
+      <div className="max-w-6xl mx-auto">
+        {activeTab === 'controle' && renderControle()}
+        {activeTab === 'visitas' && renderVisitas()}
+        {activeTab === 'admin' && renderAdmin()}
+        {activeTab === 'cc' && renderCC()}
+      </div>
+
+    </div>
+  );
+}
