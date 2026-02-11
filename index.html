@@ -68,7 +68,7 @@
         const Clipboard = (p) => <IconWrapper {...p}><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></IconWrapper>;
         const X = (p) => <IconWrapper {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></IconWrapper>;
         const Home = (p) => <IconWrapper {...p}><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></IconWrapper>;
-        const Settings = (p) => <IconWrapper {...p}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></IconWrapper>;
+        const Coffee = (p) => <IconWrapper {...p}><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></IconWrapper>;
 
         const Card = ({ children, className = "" }) => (<div className={`bg-white rounded-xl shadow-sm border border-gray-100 p-6 ${className}`}>{children}</div>);
         
@@ -93,7 +93,6 @@
         };
 
         function App() {
-            // Aba padrão alterada para 'visitas' já que o painel foi removido
             const [activeTab, setActiveTab] = useState('visitas');
             const [toast, setToast] = useState(null);
             
@@ -107,7 +106,6 @@
 
             // Dados
             const [costCenters, setCostCenters] = useState([]);
-            // hourBanks removido pois não é mais usado
             const [visits, setVisits] = useState([]); 
             const [adminEntries, setAdminEntries] = useState([]);
 
@@ -116,6 +114,9 @@
             const [startPoint, setStartPoint] = useState({ city: '', time: '' });
             const [stops, setStops] = useState([]);
             const [returnPoint, setReturnPoint] = useState({ city: '', time: '', ccId: '' });
+            
+            // NOVO: Estado para Almoço
+            const [lunch, setLunch] = useState({ start: '', end: '' });
 
             const [newAdmin, setNewAdmin] = useState({ data: '', turma: '', atividade: '', inicio: '', fim: '', supervisor: '' });
 
@@ -145,7 +146,7 @@
                     const ws = wb.Sheets[wb.SheetNames.find(n => n.includes("CC"))];
                     const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
                     const mapped = [];
-                    const seenTurmas = new Set(); // Para remover duplicadas
+                    const seenTurmas = new Set(); 
                     
                     for(let i=1; i < data.length; i++) {
                         const row = data[i];
@@ -197,6 +198,28 @@
                 const newEntries = [];
                 let lastCity = startPoint.city;
                 let lastTime = startPoint.time;
+
+                // Processar Almoço se preenchido
+                if (lunch.start || lunch.end) {
+                    if (!lunch.start || !lunch.end) return alert("Preencha o horário de saída e retorno do almoço.");
+                    const lunchDuration = calculateDuration(lunch.start, lunch.end);
+                    
+                    // VALIDAÇÃO: Almoço deve ser >= 1 hora
+                    if (lunchDuration < 0.99) { // Margem de erro pequena para arredondamentos
+                        return alert("O intervalo de descanso/almoço deve ser de no mínimo 1 hora!");
+                    }
+
+                    newEntries.push({
+                        id: Date.now() + Math.random(),
+                        type: 'descanso', // Novo tipo
+                        data: routeDate,
+                        local: 'Intervalo de Almoço',
+                        inicio: lunch.start,
+                        fim: lunch.end,
+                        turma: '',
+                        horas: lunchDuration // Contabiliza duração mas será tratado visualmente diferente
+                    });
+                }
 
                 stops.forEach(stop => {
                     if (!stop.city || !stop.arrival || !stop.ccId) return;
@@ -254,11 +277,19 @@
                     }
                 }
 
+                // Ordenar por horário para o almoço aparecer na posição certa
+                newEntries.sort((a, b) => {
+                    const timeA = parseInt(a.inicio.replace(':', ''));
+                    const timeB = parseInt(b.inicio.replace(':', ''));
+                    return timeA - timeB;
+                });
+
                 setVisits([...visits, ...newEntries]);
                 showToast(`${newEntries.length} lançamentos gerados!`);
                 setStops([]);
                 setStartPoint({ city: '', time: '' });
                 setReturnPoint({ city: '', time: '', ccId: '' });
+                setLunch({ start: '', end: '' }); // Limpa almoço
             };
 
             const addAdmin = () => {
@@ -320,9 +351,24 @@
                                                 <tbody>
                                                     {visits.map((v, i) => {
                                                         const cc = costCenters.find(c => c.id == v.turma);
-                                                        const ccCodigo = cc ? cc.codigo : '-';
-                                                        const turmaNome = cc ? cc.turma : 'N/A';
+                                                        const ccCodigo = cc ? cc.codigo : (v.type === 'descanso' ? '-' : '-');
+                                                        const turmaNome = cc ? cc.turma : (v.type === 'descanso' ? '-' : 'N/A');
                                                         const rowBg = i % 2 === 0 ? '#ffffff' : '#f8fafc';
+                                                        
+                                                        // Tratamento para Descanso
+                                                        if (v.type === 'descanso') {
+                                                            return (
+                                                                <tr key={i} style={{backgroundColor: '#f3f4f6', color: '#6b7280'}}>
+                                                                    <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>{formatDatePT(v.data)}</td>
+                                                                    <td style={{padding: '8px', border: '1px solid #e2e8f0', fontWeight: 'bold'}}>DESCANSO</td>
+                                                                    <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>Intervalo de Almoço</td>
+                                                                    <td style={{padding: '8px', border: '1px solid #e2e8f0', whiteSpace:'nowrap'}}>Início: {v.inicio}<br/>Fim: {v.fim}</td>
+                                                                    <td style={{padding: '8px', border: '1px solid #e2e8f0', textAlign: 'center'}}>-</td>
+                                                                    <td style={{padding: '8px', border: '1px solid #e2e8f0', textAlign: 'right'}}>{formatHours(v.horas)}</td>
+                                                                </tr>
+                                                            );
+                                                        }
+
                                                         const info = v.type === 'deslocamento' ? INFO_DESLOCAMENTO : INFO_ATENDIMENTO;
                                                         
                                                         return (
@@ -442,6 +488,15 @@
                             <button onClick={addStop} className="w-full py-2 border-2 border-dashed border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 font-semibold flex justify-center items-center gap-2"><Plus size={18}/> Adicionar Parada/Atendimento</button>
                         </div>
 
+                        {/* Almoço / Intervalo */}
+                        <div className="p-4 bg-gray-100 rounded-lg mb-4 border border-gray-300">
+                            <h4 className="text-xs font-bold text-gray-600 uppercase mb-2 flex items-center gap-1"><Coffee size={14}/> Intervalo de Almoço / Descanso (Mínimo 1h)</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="text-xs text-gray-500">Saída para Almoço</label><input type="time" className="w-full p-2 border rounded" value={lunch.start} onChange={e => setLunch({...lunch, start: e.target.value})} /></div>
+                                <div><label className="text-xs text-gray-500">Retorno do Almoço</label><input type="time" className="w-full p-2 border rounded" value={lunch.end} onChange={e => setLunch({...lunch, end: e.target.value})} /></div>
+                            </div>
+                        </div>
+
                         {/* Retorno */}
                         <div className="p-4 bg-orange-50 rounded-lg mb-4 border border-orange-200">
                             <h4 className="text-xs font-bold text-orange-600 uppercase mb-2 flex items-center gap-1"><Home size={14}/> Retorno à Base / Final (Apenas Deslocamento)</h4>
@@ -469,7 +524,21 @@
                         <div className="overflow-x-auto">
                             <table className="w-full text-left table-tiny">
                                 <thead className="bg-gray-100 text-gray-600"><tr><th>Data</th><th>Tipo</th><th>Detalhe</th><th>Horários</th><th>Turma</th><th>CC</th><th>Horas</th><th></th></tr></thead>
-                                <tbody>{visits.map(v => {
+                                <tbody>{visits.map((v, idx) => {
+                                    if(v.type === 'descanso') {
+                                        return (
+                                            <tr key={v.id} className="border-b bg-gray-50 text-gray-500">
+                                                <td>{formatDatePT(v.data)}</td>
+                                                <td className="font-bold">DESCANSO</td>
+                                                <td>Intervalo</td>
+                                                <td className="text-xs whitespace-nowrap">Início: {v.inicio} Fim: {v.fim}</td>
+                                                <td>-</td>
+                                                <td>-</td>
+                                                <td>{formatHours(v.horas)}</td>
+                                                <td><button onClick={() => setVisits(visits.filter(x => x.id !== v.id))} className="text-red-400"><Trash2 size={14}/></button></td>
+                                            </tr>
+                                        );
+                                    }
                                     const cc = costCenters.find(c => c.id == v.turma);
                                     const turma = cc ? cc.turma : 'N/A';
                                     const cod = cc ? cc.codigo : '-';
