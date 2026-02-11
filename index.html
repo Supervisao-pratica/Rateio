@@ -47,7 +47,7 @@
         const LINK_FIXO_DO_EXCEL = "https://github.com/Supervisao-pratica/Rateio/raw/refs/heads/main/RATEIO.xlsm"; 
         const LOGO_SENAC = "https://upload.wikimedia.org/wikipedia/commons/8/86/Senac_logo.svg"; 
 
-        // Constantes de Relatório (Códigos fixos conforme imagem)
+        // Constantes de Relatório
         const INFO_DESLOCAMENTO = { uept: 27, tept: 5956, evento: 3 };
         const INFO_ATENDIMENTO = { uept: 27, tept: 5956, evento: 24 };
 
@@ -59,7 +59,6 @@
         const Trash2 = (p) => <IconWrapper {...p}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></IconWrapper>;
         const Car = (p) => <IconWrapper {...p}><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M2 12h12"/></IconWrapper>;
         const Users = (p) => <IconWrapper {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></IconWrapper>;
-        const FileSpreadsheet = (p) => <IconWrapper {...p}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></IconWrapper>;
         const Upload = (p) => <IconWrapper {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></IconWrapper>;
         const Database = (p) => <IconWrapper {...p}><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></IconWrapper>;
         const Mail = (p) => <IconWrapper {...p}><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></IconWrapper>;
@@ -69,6 +68,7 @@
         const X = (p) => <IconWrapper {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></IconWrapper>;
         const Home = (p) => <IconWrapper {...p}><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></IconWrapper>;
         const Coffee = (p) => <IconWrapper {...p}><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></IconWrapper>;
+        const FileUp = (p) => <IconWrapper {...p}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15l3-3 3 3"/></IconWrapper>;
 
         const Card = ({ children, className = "" }) => (<div className={`bg-white rounded-xl shadow-sm border border-gray-100 p-6 ${className}`}>{children}</div>);
         
@@ -96,9 +96,6 @@
             const [activeTab, setActiveTab] = useState('visitas');
             const [toast, setToast] = useState(null);
             
-            // Estado de Configuração de Importação
-            const [showSettings, setShowSettings] = useState(false);
-
             // Estado do Modal de Relatório
             const [reportModalOpen, setReportModalOpen] = useState(false);
             const [reportType, setReportType] = useState('visitas'); 
@@ -108,6 +105,9 @@
             const [costCenters, setCostCenters] = useState([]);
             const [visits, setVisits] = useState([]); 
             const [adminEntries, setAdminEntries] = useState([]);
+            
+            // Estado para Inclusão Manual de CC
+            const [manualCC, setManualCC] = useState({ turma: '', codigo: '' });
 
             // Estado para o "Roteiro do Dia"
             const [routeDate, setRouteDate] = useState('');
@@ -115,7 +115,7 @@
             const [stops, setStops] = useState([]);
             const [returnPoint, setReturnPoint] = useState({ city: '', time: '', ccId: '' });
             
-            // NOVO: Estado para Almoço
+            // Estado para Almoço
             const [lunch, setLunch] = useState({ start: '', end: '' });
 
             const [newAdmin, setNewAdmin] = useState({ data: '', turma: '', atividade: '', inicio: '', fim: '', supervisor: '' });
@@ -164,12 +164,16 @@
                         }
                     }
                     if(mapped.length > 0) {
-                        setCostCenters(mapped);
+                        setCostCenters(prev => {
+                            const existingIds = new Set(prev.map(p => p.turma));
+                            const newUnique = mapped.filter(m => !existingIds.has(m.turma));
+                            return [...prev, ...newUnique];
+                        });
                         counts.cc = mapped.length;
                     }
                 }
 
-                if (source === 'manual') showToast(`Atualizado! CCs carregados: ${counts.cc}`);
+                if (source === 'manual') showToast(`Sucesso! Planilha processada.`);
             };
 
             const handleManualUpload = (e) => {
@@ -182,9 +186,87 @@
                 };
                 reader.readAsBinaryString(file);
             };
+            
+            // --- NOVA FUNÇÃO: Upload Genérico (Coluna A=Turma, Coluna B=CC) ---
+            const handleGenericCCUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    try {
+                        // Ler como binário para compatibilidade total
+                        const wb = XLSX.read(evt.target.result, { type: 'binary' });
+                        // Pega sempre a primeira aba
+                        const ws = wb.Sheets[wb.SheetNames[0]]; 
+                        const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+                        
+                        const newCCs = [];
+                        
+                        data.forEach((row, index) => {
+                            // Ignora linhas vazias
+                            if (row.length >= 2) {
+                                const turma = String(row[0]).trim();
+                                const codigo = String(row[1]).trim();
+                                
+                                // Validação simples para pular cabeçalhos óbvios (se tiver "Turma" na coluna A)
+                                if (turma && codigo && turma.toLowerCase() !== 'turma' && codigo.toLowerCase() !== 'cc' && codigo.toLowerCase() !== 'centro de custo') {
+                                    newCCs.push({
+                                        id: Date.now() + index, // ID único
+                                        turma: turma,
+                                        codigo: codigo,
+                                        descricao: 'Importado Lista Simples'
+                                    });
+                                }
+                            }
+                        });
+
+                        if (newCCs.length > 0) {
+                            setCostCenters(prev => {
+                                // Evita duplicatas pela Turma
+                                const existingTurmas = new Set(prev.map(c => c.turma));
+                                const filtered = newCCs.filter(c => !existingTurmas.has(c.turma));
+                                return [...prev, ...filtered];
+                            });
+                            showToast(`${newCCs.length} Turmas/CCs importados com sucesso!`);
+                        } else {
+                            showToast("Nenhum dado válido encontrado (Col A: Turma, Col B: CC).", "error");
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        showToast("Erro ao ler arquivo. Verifique o formato.", "error");
+                    }
+                };
+                reader.readAsBinaryString(file);
+            };
+
+            const addManualCC = () => {
+                if (!manualCC.turma || !manualCC.codigo) {
+                    return alert("Preencha Turma e Código do CC.");
+                }
+                
+                setCostCenters(prev => {
+                    if (prev.some(cc => cc.turma === manualCC.turma)) {
+                        alert("Esta turma já está cadastrada!");
+                        return prev;
+                    }
+                    showToast("CC adicionado com sucesso!");
+                    return [...prev, {
+                        id: Date.now(),
+                        turma: manualCC.turma,
+                        codigo: manualCC.codigo,
+                        descricao: 'Manual'
+                    }];
+                });
+                setManualCC({ turma: '', codigo: '' });
+            };
 
             const triggerUpload = () => {
                 document.getElementById('fileUpload').click();
+            };
+            
+            const triggerGenericUpload = () => {
+                document.getElementById('genericCCUpload').click();
             };
 
             const addStop = () => setStops([...stops, { id: Date.now(), city: '', arrival: '', departure: '', ccId: '' }]);
@@ -199,25 +281,22 @@
                 let lastCity = startPoint.city;
                 let lastTime = startPoint.time;
 
-                // Processar Almoço se preenchido
+                // Processar Almoço
                 if (lunch.start || lunch.end) {
                     if (!lunch.start || !lunch.end) return alert("Preencha o horário de saída e retorno do almoço.");
                     const lunchDuration = calculateDuration(lunch.start, lunch.end);
-                    
-                    // VALIDAÇÃO: Almoço deve ser >= 1 hora
-                    if (lunchDuration < 0.99) { // Margem de erro pequena para arredondamentos
+                    if (lunchDuration < 0.99) {
                         return alert("O intervalo de descanso/almoço deve ser de no mínimo 1 hora!");
                     }
-
                     newEntries.push({
                         id: Date.now() + Math.random(),
-                        type: 'descanso', // Novo tipo
+                        type: 'descanso',
                         data: routeDate,
                         local: 'Intervalo de Almoço',
                         inicio: lunch.start,
                         fim: lunch.end,
                         turma: '',
-                        horas: lunchDuration // Contabiliza duração mas será tratado visualmente diferente
+                        horas: lunchDuration
                     });
                 }
 
@@ -277,7 +356,6 @@
                     }
                 }
 
-                // Ordenar por horário para o almoço aparecer na posição certa
                 newEntries.sort((a, b) => {
                     const timeA = parseInt(a.inicio.replace(':', ''));
                     const timeB = parseInt(b.inicio.replace(':', ''));
@@ -289,7 +367,7 @@
                 setStops([]);
                 setStartPoint({ city: '', time: '' });
                 setReturnPoint({ city: '', time: '', ccId: '' });
-                setLunch({ start: '', end: '' }); // Limpa almoço
+                setLunch({ start: '', end: '' }); 
             };
 
             const addAdmin = () => {
@@ -355,7 +433,6 @@
                                                         const turmaNome = cc ? cc.turma : (v.type === 'descanso' ? '-' : 'N/A');
                                                         const rowBg = i % 2 === 0 ? '#ffffff' : '#f8fafc';
                                                         
-                                                        // Tratamento para Descanso
                                                         if (v.type === 'descanso') {
                                                             return (
                                                                 <tr key={i} style={{backgroundColor: '#f3f4f6', color: '#6b7280'}}>
@@ -370,27 +447,16 @@
                                                         }
 
                                                         const info = v.type === 'deslocamento' ? INFO_DESLOCAMENTO : INFO_ATENDIMENTO;
-                                                        
                                                         return (
                                                             <tr key={i} style={{backgroundColor: rowBg}}>
                                                                 <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>{formatDatePT(v.data)}</td>
                                                                 <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>
                                                                     <div style={{fontWeight:'bold', color: v.type==='deslocamento'?'#d97706':'#15803d'}}>{v.type.toUpperCase()}</div>
-                                                                    <div style={{fontSize:'10px', color:'#555', marginTop:'4px'}}>
-                                                                        UEPT: {info.uept} | TEPT: {info.tept}<br/>
-                                                                        Evento: <b>{info.evento}</b>
-                                                                    </div>
+                                                                    <div style={{fontSize:'10px', color:'#555', marginTop:'4px'}}>UEPT: {info.uept} | TEPT: {info.tept}<br/>Evento: <b>{info.evento}</b></div>
                                                                 </td>
-                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>
-                                                                    {v.type === 'deslocamento' ? <span>{v.origem} &#10140; {v.destino}</span> : <span>Atend. em {v.local}</span>}
-                                                                </td>
-                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0', whiteSpace:'nowrap'}}>
-                                                                    {v.type === 'deslocamento' ? <div>Saída: {v.inicio}<br/>Chegada: {v.fim}</div> : <div>Início: {v.inicio}<br/>Fim: {v.fim}</div>}
-                                                                </td>
-                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>
-                                                                    <div>{turmaNome}</div>
-                                                                    <div style={{fontFamily: 'monospace', fontWeight: 'bold', color:'#004587'}}>{ccCodigo}</div>
-                                                                </td>
+                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>{v.type === 'deslocamento' ? <span>{v.origem} &#10140; {v.destino}</span> : <span>Atend. em {v.local}</span>}</td>
+                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0', whiteSpace:'nowrap'}}>{v.type === 'deslocamento' ? <div>Saída: {v.inicio}<br/>Chegada: {v.fim}</div> : <div>Início: {v.inicio}<br/>Fim: {v.fim}</div>}</td>
+                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0'}}><div>{turmaNome}</div><div style={{fontFamily: 'monospace', fontWeight: 'bold', color:'#004587'}}>{ccCodigo}</div></td>
                                                                 <td style={{padding: '8px', border: '1px solid #e2e8f0', textAlign: 'right', fontWeight: 'bold'}}>{formatHours(v.horas)}</td>
                                                             </tr>
                                                         );
@@ -422,16 +488,10 @@
                                                         return (
                                                             <tr key={i} style={{backgroundColor: rowBg}}>
                                                                 <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>{formatDatePT(a.data)}</td>
-                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0', fontSize:'10px', color:'#555'}}>
-                                                                    UEPT: {INFO_ATENDIMENTO.uept} | TEPT: {INFO_ATENDIMENTO.tept}<br/>
-                                                                    Evento: <b>{INFO_ATENDIMENTO.evento}</b>
-                                                                </td>
+                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0', fontSize:'10px', color:'#555'}}>UEPT: {INFO_ATENDIMENTO.uept} | TEPT: {INFO_ATENDIMENTO.tept}<br/>Evento: <b>{INFO_ATENDIMENTO.evento}</b></td>
                                                                 <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>{a.atividade}</td>
                                                                 <td style={{padding: '8px', border: '1px solid #e2e8f0', whiteSpace:'nowrap'}}>Início: {a.inicio}<br/>Fim: {a.fim}</td>
-                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0'}}>
-                                                                    <div>{a.turma}</div>
-                                                                    <div style={{fontFamily: 'monospace', fontWeight: 'bold', color:'#004587'}}>{ccCodigo}</div>
-                                                                </td>
+                                                                <td style={{padding: '8px', border: '1px solid #e2e8f0'}}><div>{a.turma}</div><div style={{fontFamily: 'monospace', fontWeight: 'bold', color:'#004587'}}>{ccCodigo}</div></td>
                                                                 <td style={{padding: '8px', border: '1px solid #e2e8f0', textAlign: 'right', fontWeight: 'bold'}}>{formatHours(calculateDuration(a.inicio, a.fim))}</td>
                                                             </tr>
                                                         );
@@ -442,12 +502,9 @@
                                     )}
                                 </div>
                             </div>
-
                             <div className="p-4 border-t bg-white rounded-b-xl flex justify-end gap-3">
                                 <button onClick={() => setReportModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Fechar</button>
-                                <button onClick={copyReportToClipboard} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 flex items-center gap-2 shadow-md">
-                                    <Clipboard size={18} /> Copiar para Outlook
-                                </button>
+                                <button onClick={copyReportToClipboard} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 flex items-center gap-2 shadow-md"><Clipboard size={18} /> Copiar para Outlook</button>
                             </div>
                         </div>
                     </div>
@@ -461,8 +518,6 @@
                             <h3 className="font-bold text-lg flex items-center gap-2"><MapPin className="text-blue-600"/> Criador de Roteiro Diário</h3>
                             <input type="date" className="p-2 border rounded font-bold text-gray-700" value={routeDate} onChange={e => setRouteDate(e.target.value)} />
                         </div>
-                        
-                        {/* Partida */}
                         <div className="p-4 bg-gray-50 rounded-lg mb-4 border border-gray-200">
                             <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">1. Ponto de Partida</h4>
                             <div className="grid grid-cols-2 gap-4">
@@ -470,8 +525,6 @@
                                 <input type="time" className="p-2 border rounded" value={startPoint.time} onChange={e => setStartPoint({...startPoint, time: e.target.value})} />
                             </div>
                         </div>
-
-                        {/* Paradas */}
                         <div className="space-y-3 mb-4">
                             {stops.map((stop, idx) => (
                                 <div key={stop.id} className="p-4 bg-white border border-blue-100 rounded-lg shadow-sm relative">
@@ -481,14 +534,19 @@
                                         <div><label className="text-xs text-gray-500">Cidade Destino</label><input type="text" className="w-full p-2 border rounded" value={stop.city} onChange={e => updateStop(stop.id, 'city', e.target.value)} /></div>
                                         <div><label className="text-xs text-gray-500">Chegada</label><input type="time" className="w-full p-2 border rounded" value={stop.arrival} onChange={e => updateStop(stop.id, 'arrival', e.target.value)} /></div>
                                         <div><label className="text-xs text-gray-500">Saída (Fim atend.)</label><input type="time" className="w-full p-2 border rounded" value={stop.departure} onChange={e => updateStop(stop.id, 'departure', e.target.value)} /></div>
-                                        <div><label className="text-xs text-gray-500">Turma/CC</label><select className="w-full p-2 border rounded text-sm" value={stop.ccId} onChange={e => updateStop(stop.id, 'ccId', e.target.value)}><option value="">Selecione...</option>{costCenters.map(cc => (<option key={cc.id} value={cc.id}>{cc.turma} - {cc.codigo}</option>))}</select></div>
+                                        <div>
+                                            <label className="text-xs text-gray-500">Turma/CC</label>
+                                            <select className="w-full p-2 border rounded text-sm" value={stop.ccId} onChange={e => updateStop(stop.id, 'ccId', e.target.value)}>
+                                                <option value="">Selecione...</option>
+                                                {costCenters.length === 0 && <option value="" disabled>Nenhum CC Cadastrado</option>}
+                                                {costCenters.map(cc => (<option key={cc.id} value={cc.id}>{cc.turma} - {cc.codigo}</option>))}
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
                             ))}
                             <button onClick={addStop} className="w-full py-2 border-2 border-dashed border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 font-semibold flex justify-center items-center gap-2"><Plus size={18}/> Adicionar Parada/Atendimento</button>
                         </div>
-
-                        {/* Almoço / Intervalo */}
                         <div className="p-4 bg-gray-100 rounded-lg mb-4 border border-gray-300">
                             <h4 className="text-xs font-bold text-gray-600 uppercase mb-2 flex items-center gap-1"><Coffee size={14}/> Intervalo de Almoço / Descanso (Mínimo 1h)</h4>
                             <div className="grid grid-cols-2 gap-4">
@@ -496,8 +554,6 @@
                                 <div><label className="text-xs text-gray-500">Retorno do Almoço</label><input type="time" className="w-full p-2 border rounded" value={lunch.end} onChange={e => setLunch({...lunch, end: e.target.value})} /></div>
                             </div>
                         </div>
-
-                        {/* Retorno */}
                         <div className="p-4 bg-orange-50 rounded-lg mb-4 border border-orange-200">
                             <h4 className="text-xs font-bold text-orange-600 uppercase mb-2 flex items-center gap-1"><Home size={14}/> Retorno à Base / Final (Apenas Deslocamento)</h4>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -512,10 +568,8 @@
                                 </div>
                             </div>
                         </div>
-
                         <button onClick={saveRoute} className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold flex justify-center items-center gap-2 shadow-lg"><Save size={18}/> Salvar Roteiro Completo</button>
                     </Card>
-
                     <Card>
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="font-bold text-gray-700">Histórico de Atividades</h3>
@@ -524,7 +578,7 @@
                         <div className="overflow-x-auto">
                             <table className="w-full text-left table-tiny">
                                 <thead className="bg-gray-100 text-gray-600"><tr><th>Data</th><th>Tipo</th><th>Detalhe</th><th>Horários</th><th>Turma</th><th>CC</th><th>Horas</th><th></th></tr></thead>
-                                <tbody>{visits.map((v, idx) => {
+                                <tbody>{visits.map(v => {
                                     if(v.type === 'descanso') {
                                         return (
                                             <tr key={v.id} className="border-b bg-gray-50 text-gray-500">
@@ -567,7 +621,11 @@
                         <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Users className="text-purple-600"/> Lançamento Administrativo</h3>
                         <div className="grid grid-cols-1 gap-4 mb-4">
                             <input type="date" className="p-2 border rounded" value={newAdmin.data} onChange={e => setNewAdmin({...newAdmin, data: e.target.value})} />
-                            <select className="p-2 border rounded" value={newAdmin.turma} onChange={e => setNewAdmin({...newAdmin, turma: e.target.value})}><option value="">Selecione Turma...</option>{costCenters.map(cc => <option key={cc.id} value={cc.turma}>{cc.turma}</option>)}</select>
+                            <select className="p-2 border rounded" value={newAdmin.turma} onChange={e => setNewAdmin({...newAdmin, turma: e.target.value})}>
+                                <option value="">Selecione Turma...</option>
+                                {costCenters.length === 0 && <option value="" disabled>Nenhum CC Cadastrado</option>}
+                                {costCenters.map(cc => <option key={cc.id} value={cc.turma}>{cc.turma}</option>)}
+                            </select>
                             <input type="text" placeholder="Atividade" className="p-2 border rounded" value={newAdmin.atividade} onChange={e => setNewAdmin({...newAdmin, atividade: e.target.value})} />
                             <div className="flex gap-4"><input type="time" className="p-2 border rounded flex-1" value={newAdmin.inicio} onChange={e => setNewAdmin({...newAdmin, inicio: e.target.value})} /><input type="time" className="p-2 border rounded flex-1" value={newAdmin.fim} onChange={e => setNewAdmin({...newAdmin, fim: e.target.value})} /></div>
                         </div>
@@ -589,15 +647,99 @@
             );
 
             const renderCC = () => (
-                <Card>
-                    <h3 className="font-bold text-lg mb-4">Centros de Custo (Carregados)</h3>
-                    <div className="overflow-x-auto max-h-96">
-                        <table className="w-full text-left border-collapse text-sm">
-                            <thead><tr className="bg-gray-100 sticky top-0"><th className="p-2 border-b">Turma</th><th className="p-2 border-b">CC</th><th className="p-2 border-b">Descrição</th></tr></thead>
-                            <tbody>{costCenters.map(cc => <tr key={cc.id} className="border-b hover:bg-gray-50"><td className="p-2 font-bold text-gray-700">{cc.turma}</td><td className="p-2 font-mono text-blue-600">{cc.codigo}</td><td className="p-2 text-gray-500">{cc.descricao}</td></tr>)}</tbody>
-                        </table>
-                    </div>
-                </Card>
+                <div className="space-y-6">
+                    {/* Painel de Inserção */}
+                    <Card>
+                        <h3 className="font-bold text-lg mb-4 text-gray-800 flex items-center gap-2">
+                            <Plus size={20} className="text-blue-600"/> Adicionar Centros de Custo
+                        </h3>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            {/* Lado Esquerdo: Manual */}
+                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <h4 className="text-sm font-bold text-gray-700 mb-3 border-b pb-2">Cadastro Manual</h4>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="text-xs text-gray-500 font-bold block mb-1">Número da Turma</label>
+                                        <input 
+                                            type="text" 
+                                            className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-300 outline-none" 
+                                            placeholder="Ex: 202400123"
+                                            value={manualCC.turma}
+                                            onChange={e => setManualCC({...manualCC, turma: e.target.value})}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-gray-500 font-bold block mb-1">Código CC</label>
+                                        <input 
+                                            type="text" 
+                                            className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-300 outline-none" 
+                                            placeholder="Ex: 12345ABC"
+                                            value={manualCC.codigo}
+                                            onChange={e => setManualCC({...manualCC, codigo: e.target.value})}
+                                        />
+                                    </div>
+                                    <button 
+                                        onClick={addManualCC} 
+                                        className="w-full bg-blue-600 text-white py-2 rounded text-sm font-bold hover:bg-blue-700 transition-colors flex justify-center items-center gap-2"
+                                    >
+                                        <Plus size={16}/> Adicionar
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Lado Direito: Upload Genérico */}
+                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                                <h4 className="text-sm font-bold text-blue-800 mb-3 border-b border-blue-200 pb-2">Importar Lista Simples (Excel)</h4>
+                                <p className="text-xs text-gray-600 mb-4">
+                                    Faça upload de qualquer arquivo Excel (.xlsx, .xls, .csv). O sistema lerá a <b>1ª aba</b>:
+                                    <br/>• <b>Coluna A:</b> Turma
+                                    <br/>• <b>Coluna B:</b> Código CC
+                                </p>
+                                <button 
+                                    onClick={triggerGenericUpload} 
+                                    className="w-full bg-white border-2 border-blue-300 text-blue-700 py-6 rounded-lg font-bold hover:bg-blue-100 transition-all flex flex-col items-center justify-center gap-2 border-dashed"
+                                >
+                                    <Upload size={24}/> 
+                                    <span>Selecionar Arquivo Excel</span>
+                                </button>
+                                <input type="file" id="genericCCUpload" accept=".xlsx,.xls,.csv" onChange={handleGenericCCUpload} className="hidden-input" />
+                            </div>
+                        </div>
+                    </Card>
+
+                    {/* Tabela de Listagem */}
+                    <Card>
+                        <h3 className="font-bold text-lg mb-4 text-gray-700 flex items-center gap-2">
+                            <Database size={20} className="text-gray-500"/> Centros de Custo Cadastrados
+                            <span className="bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded-full">{costCenters.length}</span>
+                        </h3>
+                        <div className="overflow-x-auto max-h-96 border rounded-lg">
+                            <table className="w-full text-left border-collapse text-sm">
+                                <thead>
+                                    <tr className="bg-gray-100 sticky top-0 z-10">
+                                        <th className="p-3 border-b font-bold text-gray-600">Turma (Col A)</th>
+                                        <th className="p-3 border-b font-bold text-gray-600">CC (Col B)</th>
+                                        <th className="p-3 border-b font-bold text-gray-600">Origem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {costCenters.length === 0 ? (
+                                        <tr><td colSpan="3" className="p-8 text-center text-gray-400">Nenhum CC cadastrado ainda. Use as opções acima.</td></tr>
+                                    ) : (
+                                        costCenters.map(cc => (
+                                            <tr key={cc.id} className="border-b hover:bg-gray-50 transition-colors">
+                                                <td className="p-3 font-bold text-gray-800">{cc.turma}</td>
+                                                <td className="p-3 font-mono text-blue-600 bg-blue-50 w-min whitespace-nowrap px-4 rounded">{cc.codigo}</td>
+                                                <td className="p-3 text-gray-400 text-xs italic">{cc.descricao || '-'}</td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </Card>
+                </div>
             );
 
             return (
@@ -610,7 +752,7 @@
                         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
                             <div><h1 className="text-2xl font-bold text-gray-900">Sistema de Rateio</h1><p className="text-gray-500 text-sm">Gestão de Horas e Roteiros</p></div>
                             <div className="flex gap-2">
-                                <button onClick={triggerUpload} className="bg-blue-600 text-white px-6 py-2 rounded-lg shadow hover:bg-blue-700 flex items-center gap-2 font-bold animate-pulse"><Upload size={18} /> Importar Planilha (Rateio)</button>
+                                <button onClick={triggerUpload} className="bg-blue-600 text-white px-6 py-2 rounded-lg shadow hover:bg-blue-700 flex items-center gap-2 font-bold animate-pulse"><Upload size={18} /> Importar Planilha Completa (Rateio)</button>
                             </div>
                         </div>
                     </div>
